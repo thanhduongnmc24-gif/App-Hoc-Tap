@@ -1,9 +1,11 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform, Image } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
+// Import pháo giấy xịn xò
+import ConfettiCannon from 'react-native-confetti-cannon';
 
 type Problem = {
   id: number;
@@ -12,16 +14,24 @@ type Problem = {
   userAnswer: string;
 };
 
+// Kho ảnh tấu hài ngẫu nhiên cho bé
+const FUNNY_IMAGES = [
+  'https://media.tenor.com/2sXG-d5N5mIAAAAi/capybara-spa.gif',
+  'https://media.tenor.com/OqG3p011g9EAAAAi/cat-funny.gif',
+  'https://media.tenor.com/8QG34t8Nq9QAAAAi/capybara-ok.gif',
+  'https://media.tenor.com/yF-mUOrQ2zAAAAAi/funny-cat.gif',
+  'https://media.tenor.com/1-qWjA-h_O0AAAAi/capybara-dance.gif'
+];
+
 export default function LearningScreen() {
   const { colors } = useTheme();
   const [maxLimit, setMaxLimit] = useState(10);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [activeInputIndex, setActiveInputIndex] = useState<number | null>(null);
   
-  const [showResultModal, setShowResultModal] = useState(false);
   const [score, setScore] = useState(0);
-  
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [randomImage, setRandomImage] = useState(FUNNY_IMAGES[0]);
   
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -54,13 +64,11 @@ export default function LearningScreen() {
     }
   };
 
-  // NÂNG CẤP: Sinh 10 câu hỏi KHÔNG TRÙNG NHAU
   const createNewProblems = (limit: number) => {
     setIsSubmitted(false);
     const newProblems: Problem[] = [];
-    const usedCombos = new Set<string>(); // Sổ tay ghi nhớ các phép tính đã ra
+    const usedCombos = new Set<string>();
     
-    // Đề phòng anh hai đặt limit quá nhỏ không đủ 10 câu khác nhau (VD: limit=4 chỉ có 6 phép cộng khác nhau)
     let maxAttempts = 100;
     let attempts = 0;
 
@@ -71,17 +79,14 @@ export default function LearningScreen() {
       
       if (limit <= 1) { num1 = 0; num2 = 1; }
 
-      // Tạo "chữ ký" của phép tính (VD: "3+4")
       const comboKey = `${num1}+${num2}`;
 
-      // Nếu sổ tay chưa ghi nhận phép tính này thì mới đưa vào đề
       if (!usedCombos.has(comboKey)) {
         usedCombos.add(comboKey);
         newProblems.push({ id: newProblems.length, num1, num2, userAnswer: '' });
       }
     }
 
-    // Cơ chế chống cháy: Lấp đầy các câu thiếu nếu limit nhỏ làm vòng lặp while kiệt sức
     while (newProblems.length < 10) {
       let num1 = Math.floor(Math.random() * (limit - 1)) + 1;
       let num2 = Math.floor(Math.random() * (limit - num1)) + 1;
@@ -147,15 +152,16 @@ export default function LearningScreen() {
     setScore(currentScore);
     setIsSubmitted(true);
     
-    setTimeout(() => {
-      setShowResultModal(true);
-    }, 100);
+    // Bốc ngẫu nhiên một tấm ảnh hài hước
+    const randomImg = FUNNY_IMAGES[Math.floor(Math.random() * FUNNY_IMAGES.length)];
+    setRandomImage(randomImg);
+    
+    // Kéo lên trên cùng để bé xem lại từ câu 1
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
   const handleReplay = () => {
-    setShowResultModal(false);
     setProblems(createNewProblems(maxLimit));
-    
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
@@ -197,6 +203,39 @@ export default function LearningScreen() {
     </View>
   );
 
+  // Giao diện bảng điểm mới nằm gọn bên phải
+  const ScoreBoard = () => (
+    <View style={styles.scoreBoardContainer}>
+      {score === 10 && (
+        <ConfettiCannon 
+          count={200} 
+          origin={{x: -10, y: 0}} 
+          fallSpeed={2500} 
+          fadeOut={true} 
+          autoStart={true} 
+        />
+      )}
+      <Text style={styles.modalTitle}>🎉 KẾT QUẢ 🎉</Text>
+      
+      <Text style={styles.scoreText}>{score}</Text>
+      
+      <Image 
+        source={{ uri: randomImage }} 
+        style={styles.funnyImage} 
+      />
+      
+      <Text style={styles.messageText}>
+        {score === 10 ? 'Tuyệt vời! Phương Linh 10 điểm! 🌟' : 
+         score >= 7 ? 'Giỏi lắm! Cố xíu nữa nhé! 💪' : 
+         'Lần sau cẩn thận hơn nha bé! 🎈'}
+      </Text>
+      
+      <TouchableOpacity style={styles.replayBtn} onPress={handleReplay}>
+        <Text style={styles.replayBtnText}>Làm Lại Bài Mới 🔄</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
       <View style={styles.header}>
@@ -204,6 +243,7 @@ export default function LearningScreen() {
       </View>
 
       <View style={styles.mainContent}>
+        {/* CỘT BÊN TRÁI: DANH SÁCH CÂU HỎI */}
         <View style={styles.exerciseColumn}>
           <ScrollView 
             ref={scrollViewRef} 
@@ -216,6 +256,7 @@ export default function LearningScreen() {
               
               return (
                 <View key={p.id} style={styles.problemRow}>
+                  {/* Tèo đã nới rộng width lên 105 để câu 10 không bị lệch hàng nữa */}
                   <Text style={[styles.problemText, { color: colors.text }]}>Câu {index + 1}:</Text>
                   <View style={styles.mathExpression}>
                     <Text style={[styles.mathText, { color: colors.text }]}>{p.num1} + {p.num2} =</Text>
@@ -227,7 +268,10 @@ export default function LearningScreen() {
                         isWrong && styles.wrongAnswerBox, 
                         { backgroundColor: colors.card, borderColor: activeInputIndex === index ? '#1D4ED8' : isWrong ? '#EF4444' : colors.border }
                       ]}
-                      onPress={() => setActiveInputIndex(index)}
+                      onPress={() => {
+                        if (!isSubmitted) setActiveInputIndex(index);
+                      }}
+                      disabled={isSubmitted} // Nộp bài rồi thì khóa không cho bấm vào ô trống nữa
                     >
                       <Text style={[
                           styles.answerText, 
@@ -247,14 +291,19 @@ export default function LearningScreen() {
               );
             })}
 
-            <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-              <Text style={styles.submitBtnText}>🏆 CHẤM ĐIỂM 🏆</Text>
-            </TouchableOpacity>
+            {!isSubmitted && (
+              <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
+                <Text style={styles.submitBtnText}>🏆 CHẤM ĐIỂM 🏆</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </View>
 
+        {/* CỘT BÊN PHẢI: LINH HOẠT THAY ĐỔI */}
         <View style={styles.numpadColumn}>
-          {activeInputIndex !== null ? (
+          {isSubmitted ? (
+             <ScoreBoard />
+          ) : activeInputIndex !== null ? (
              <Numpad />
           ) : (
              <View style={styles.placeholderNumpad}>
@@ -266,36 +315,6 @@ export default function LearningScreen() {
           )}
         </View>
       </View>
-
-      <Modal visible={showResultModal} transparent={true} animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>🎉 KẾT QUẢ 🎉</Text>
-            
-            <Text style={styles.scoreText}>{score}</Text>
-            
-            <Text style={styles.messageText}>
-              {score === 10 ? 'Quá đỉnh! Phương Linh đạt điểm tuyệt đối! 🌟' : 
-               score >= 7 ? 'Rất giỏi! Bé cố gắng thêm chút nữa nhé! 💪' : 
-               'Lần sau mình làm cẩn thận hơn nha bé! 🎈'}
-            </Text>
-            
-            <TouchableOpacity 
-              style={styles.replayBtn} 
-              onPress={handleReplay}
-            >
-              <Text style={styles.replayBtnText}>Làm Lại Bài Mới 🔄</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={{ marginTop: 15 }} 
-              onPress={() => setShowResultModal(false)}
-            >
-              <Text style={{ color: 'gray', fontSize: 16 }}>Đóng để xem lại bài</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -309,19 +328,18 @@ const styles = StyleSheet.create({
   numpadColumn: { flex: 2, justifyContent: 'center', alignItems: 'center', borderLeftWidth: 2, borderLeftColor: '#E5E7EB', paddingLeft: 15 },
   scrollContent: { paddingBottom: 50 },
   problemRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, backgroundColor: 'rgba(255,255,255,0.5)', padding: 10, borderRadius: 15 },
-  problemText: { fontSize: 22, fontWeight: 'bold', width: 90, color: '#4B5563' },
+  
+  // Tăng width lên 105 để cân bằng độ dài chữ "Câu 10"
+  problemText: { fontSize: 22, fontWeight: 'bold', width: 105, color: '#4B5563' },
+  
   mathExpression: { flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-start' },
   mathText: { fontSize: 32, fontWeight: 'bold', letterSpacing: 2, marginRight: 15 },
   answerBox: { width: 80, height: 60, borderWidth: 3, borderRadius: 15, justifyContent: 'center', alignItems: 'center', backgroundColor: 'white' },
-  
   activeAnswerBox: { borderWidth: 4, backgroundColor: '#DBEAFE', shadowColor: '#1D4ED8', shadowOffset: {width: 0, height: 0}, shadowOpacity: 0.6, shadowRadius: 10, elevation: 6 },
   wrongAnswerBox: { backgroundColor: '#FEF2F2' },
-  
   answerText: { fontSize: 32, fontWeight: 'bold' },
-  
   correctionBadge: { marginLeft: 15, backgroundColor: '#DCFCE7', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: '#22C55E' },
   correctionText: { color: '#15803D', fontSize: 18, fontWeight: 'bold' },
-
   submitBtn: { backgroundColor: '#F59E0B', paddingVertical: 15, borderRadius: 20, alignItems: 'center', marginTop: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 8 },
   submitBtnText: { color: 'white', fontSize: 24, fontWeight: '900' },
   
@@ -332,11 +350,12 @@ const styles = StyleSheet.create({
   numpadText: { fontSize: 30, fontWeight: 'bold', color: '#1F2937' },
   placeholderNumpad: { alignItems: 'center', justifyContent: 'center', flex: 1 },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: 'white', padding: 30, borderRadius: 25, alignItems: 'center', width: 350, borderWidth: 6, borderColor: '#FCD34D' },
-  modalTitle: { fontSize: 32, fontWeight: '900', color: '#F59E0B', marginBottom: 10 },
-  scoreText: { fontSize: 90, fontWeight: '900', color: '#EF4444', marginBottom: 10 },
-  messageText: { fontSize: 22, textAlign: 'center', color: '#4B5563', marginBottom: 25, fontWeight: '700' },
-  replayBtn: { backgroundColor: '#10B981', paddingVertical: 15, paddingHorizontal: 30, borderRadius: 15, shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 },
-  replayBtnText: { color: 'white', fontSize: 20, fontWeight: 'bold' }
+  // Giao diện bảng điểm bên phải
+  scoreBoardContainer: { width: '100%', maxWidth: 350, backgroundColor: 'white', padding: 20, borderRadius: 25, alignItems: 'center', borderWidth: 5, borderColor: '#FCD34D', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 8 },
+  modalTitle: { fontSize: 28, fontWeight: '900', color: '#F59E0B', marginBottom: 5 },
+  scoreText: { fontSize: 70, fontWeight: '900', color: '#EF4444', marginBottom: 10 },
+  funnyImage: { width: 150, height: 150, borderRadius: 15, marginBottom: 15 },
+  messageText: { fontSize: 20, textAlign: 'center', color: '#4B5563', marginBottom: 20, fontWeight: '700' },
+  replayBtn: { backgroundColor: '#10B981', paddingVertical: 15, paddingHorizontal: 25, borderRadius: 15, width: '100%', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 },
+  replayBtnText: { color: 'white', fontSize: 18, fontWeight: 'bold' }
 });
