@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabaseConfig';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +21,6 @@ export default function LearningScreen() {
   const [showResultModal, setShowResultModal] = useState(false);
   const [score, setScore] = useState(0);
 
-  // Mỗi lần chuyển tab sẽ gọi hàm này
   useFocusEffect(
     useCallback(() => {
       fetchLimit();
@@ -34,17 +33,14 @@ export default function LearningScreen() {
       const { data } = await supabase.from('be_hoc_toan_data').select('max_limit').eq('user_id', user.id).single();
       const fetchedLimit = data?.max_limit || 10;
       
-      // 1. Kiểm tra xem giới hạn có bị thay đổi không
       setMaxLimit(prevLimit => {
         if (prevLimit !== fetchedLimit) {
-          // NẾU CÓ ĐỔI: Tạo đề mới luôn
           setProblems(createNewProblems(fetchedLimit));
           return fetchedLimit;
         }
-        return prevLimit; // NẾU KHÔNG ĐỔI: Giữ nguyên giới hạn cũ
+        return prevLimit;
       });
 
-      // 2. Nếu là lần đầu mở app (chưa có bài tập nào) thì mới tạo
       setProblems(prevProbs => {
         if (prevProbs.length === 0) {
           return createNewProblems(fetchedLimit);
@@ -54,16 +50,12 @@ export default function LearningScreen() {
     }
   };
 
-  // Hàm tạo đề mới (Đã triệt tiêu phép + 0)
   const createNewProblems = (limit: number) => {
     const newProblems: Problem[] = [];
     for (let i = 0; i < 10; i++) {
-      // Ép số thứ nhất chạy từ 1 đến (limit - 1)
       let num1 = Math.floor(Math.random() * (limit - 1)) + 1;
-      // Ép số thứ hai chạy từ 1 đến (limit - num1)
       let num2 = Math.floor(Math.random() * (limit - num1)) + 1;
       
-      // Đề phòng trường hợp anh hai lỡ cài limit quá nhỏ
       if (limit <= 1) { num1 = 0; num2 = 1; }
 
       newProblems.push({ id: i, num1, num2, userAnswer: '' });
@@ -95,26 +87,38 @@ export default function LearningScreen() {
     setActiveInputIndex(null);
   };
 
+  // HÀM CHẤM ĐIỂM ĐÃ ĐƯỢC NÂNG CẤP CHỐNG VĂNG APP
   const handleSubmit = () => {
+    // 1. Ép ẩn bàn phím ảo (Numpad) đi để tránh xung đột UI trên iOS
+    setActiveInputIndex(null);
+
+    // 2. Kiểm tra xem bé làm xong chưa
     const isCompleted = problems.every(p => p.userAnswer !== '');
     if (!isCompleted) {
-      if (Platform.OS === 'web') {
-          window.alert('Khoan đã! Phương Linh chưa làm xong hết 10 câu kìa!');
-      } else {
-          Alert.alert('Khoan đã!', 'Phương Linh chưa làm xong hết 10 câu kìa!'); 
-      }
+      // Dùng Alert chuẩn của React Native, có thêm mảng nút bấm (Buttons array) để an toàn tuyệt đối
+      Alert.alert(
+        'Khoan đã!', 
+        'Phương Linh chưa làm xong hết 10 câu kìa!',
+        [{ text: 'Dạ vâng', style: 'default' }]
+      ); 
       return;
     }
 
+    // 3. Tính điểm
     let currentScore = 0;
     problems.forEach(p => {
-      if (p.num1 + p.num2 === parseInt(p.userAnswer)) {
+      // Ép kiểu an toàn với cơ số 10
+      if (p.num1 + p.num2 === parseInt(p.userAnswer, 10)) {
         currentScore += 1;
       }
     });
 
     setScore(currentScore);
-    setShowResultModal(true);
+    
+    // 4. Delay 1 chút xíu (100ms) để hệ thống kịp dọn dẹp bàn phím rồi mới bung Modal kết quả
+    setTimeout(() => {
+      setShowResultModal(true);
+    }, 100);
   };
 
   const Numpad = () => (
@@ -207,7 +211,8 @@ export default function LearningScreen() {
       </View>
 
       {/* POPUP KẾT QUẢ HIỆN LÊN SAU KHI CHẤM ĐIỂM */}
-      <Modal visible={showResultModal} transparent animationType="slide">
+      {/* Đã thêm transparent={true} để an toàn trên mọi thiết bị */}
+      <Modal visible={showResultModal} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>🎉 KẾT QUẢ 🎉</Text>
@@ -224,7 +229,7 @@ export default function LearningScreen() {
               style={styles.replayBtn} 
               onPress={() => {
                 setShowResultModal(false);
-                setProblems(createNewProblems(maxLimit)); // Gọi lại hàm với giới hạn hiện tại
+                setProblems(createNewProblems(maxLimit)); 
               }}
             >
               <Text style={styles.replayBtnText}>Làm Lại Bài Mới 🔄</Text>
