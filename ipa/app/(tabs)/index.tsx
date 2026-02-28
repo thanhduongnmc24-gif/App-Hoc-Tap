@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabaseConfig';
 import { Ionicons } from '@expo/vector-icons';
@@ -87,25 +87,27 @@ export default function LearningScreen() {
     setActiveInputIndex(null);
   };
 
+  // HÀM CHẤM ĐIỂM ĐÃ ĐƯỢC NÂNG CẤP CHỐNG VĂNG APP
   const handleSubmit = () => {
+    // 1. Ép ẩn bàn phím ảo (Numpad) đi để tránh xung đột UI trên iOS
     setActiveInputIndex(null);
 
+    // 2. Kiểm tra xem bé làm xong chưa
     const isCompleted = problems.every(p => p.userAnswer !== '');
     if (!isCompleted) {
-      if (Platform.OS === 'web') {
-          window.alert('Khoan đã! Phương Linh chưa làm xong hết 10 câu kìa!');
-      } else {
-          Alert.alert(
-            'Khoan đã!', 
-            'Phương Linh chưa làm xong hết 10 câu kìa!',
-            [{ text: 'Dạ vâng', style: 'default' }]
-          ); 
-      }
+      // Dùng Alert chuẩn của React Native, có thêm mảng nút bấm (Buttons array) để an toàn tuyệt đối
+      Alert.alert(
+        'Khoan đã!', 
+        'Phương Linh chưa làm xong hết 10 câu kìa!',
+        [{ text: 'Dạ vâng', style: 'default' }]
+      ); 
       return;
     }
 
+    // 3. Tính điểm
     let currentScore = 0;
     problems.forEach(p => {
+      // Ép kiểu an toàn với cơ số 10
       if (p.num1 + p.num2 === parseInt(p.userAnswer, 10)) {
         currentScore += 1;
       }
@@ -113,6 +115,7 @@ export default function LearningScreen() {
 
     setScore(currentScore);
     
+    // 4. Delay 1 chút xíu (100ms) để hệ thống kịp dọn dẹp bàn phím rồi mới bung Modal kết quả
     setTimeout(() => {
       setShowResultModal(true);
     }, 100);
@@ -207,6 +210,8 @@ export default function LearningScreen() {
         </View>
       </View>
 
+      {/* POPUP KẾT QUẢ HIỆN LÊN SAU KHI CHẤM ĐIỂM */}
+      {/* Đã thêm transparent={true} để an toàn trên mọi thiết bị */}
       <Modal visible={showResultModal} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
