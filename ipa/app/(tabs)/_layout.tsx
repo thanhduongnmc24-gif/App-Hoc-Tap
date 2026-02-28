@@ -2,7 +2,6 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { View } from 'react-native'; 
-// Chú ý đường dẫn mới: ../../context
 import { useTheme } from '../../context/ThemeContext';
 
 export default function TabLayout() {
@@ -18,17 +17,17 @@ export default function TabLayout() {
             height: 60, 
             paddingBottom: 5 
           },
-          tabBarActiveTintColor: colors.primary,
+          tabBarActiveTintColor: '#F59E0B',
           tabBarInactiveTintColor: colors.subText,
-          tabBarLabelStyle: { fontSize: 12, fontWeight: '500' }
+          tabBarLabelStyle: { fontSize: 13, fontWeight: 'bold' }
         }}>
         
         <Tabs.Screen 
           name="index" 
           options={{ 
-            title: 'Gia Phả', 
+            title: 'Học Toán', 
             tabBarIcon: ({ color, focused }) => (
-              <Ionicons name={focused ? "people" : "people-outline"} size={28} color={color} /> 
+              <Ionicons name={focused ? "calculator" : "calculator-outline"} size={28} color={color} /> 
             ) 
           }} 
         />
