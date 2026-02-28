@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert } from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, Platform } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabaseConfig';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +20,10 @@ export default function LearningScreen() {
   
   const [showResultModal, setShowResultModal] = useState(false);
   const [score, setScore] = useState(0);
+  
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  
+  const scrollViewRef = useRef<ScrollView>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -50,21 +54,48 @@ export default function LearningScreen() {
     }
   };
 
+  // NÂNG CẤP: Sinh 10 câu hỏi KHÔNG TRÙNG NHAU
   const createNewProblems = (limit: number) => {
+    setIsSubmitted(false);
     const newProblems: Problem[] = [];
-    for (let i = 0; i < 10; i++) {
+    const usedCombos = new Set<string>(); // Sổ tay ghi nhớ các phép tính đã ra
+    
+    // Đề phòng anh hai đặt limit quá nhỏ không đủ 10 câu khác nhau (VD: limit=4 chỉ có 6 phép cộng khác nhau)
+    let maxAttempts = 100;
+    let attempts = 0;
+
+    while (newProblems.length < 10 && attempts < maxAttempts) {
+      attempts++;
       let num1 = Math.floor(Math.random() * (limit - 1)) + 1;
       let num2 = Math.floor(Math.random() * (limit - num1)) + 1;
       
       if (limit <= 1) { num1 = 0; num2 = 1; }
 
-      newProblems.push({ id: i, num1, num2, userAnswer: '' });
+      // Tạo "chữ ký" của phép tính (VD: "3+4")
+      const comboKey = `${num1}+${num2}`;
+
+      // Nếu sổ tay chưa ghi nhận phép tính này thì mới đưa vào đề
+      if (!usedCombos.has(comboKey)) {
+        usedCombos.add(comboKey);
+        newProblems.push({ id: newProblems.length, num1, num2, userAnswer: '' });
+      }
     }
+
+    // Cơ chế chống cháy: Lấp đầy các câu thiếu nếu limit nhỏ làm vòng lặp while kiệt sức
+    while (newProblems.length < 10) {
+      let num1 = Math.floor(Math.random() * (limit - 1)) + 1;
+      let num2 = Math.floor(Math.random() * (limit - num1)) + 1;
+      if (limit <= 1) { num1 = 0; num2 = 1; }
+      newProblems.push({ id: newProblems.length, num1, num2, userAnswer: '' });
+    }
+
     return newProblems;
   };
 
   const handleKeyPress = (val: string) => {
     if (activeInputIndex === null) return;
+    setIsSubmitted(false);
+    
     setProblems(prev => {
       const newProbs = [...prev];
       if (newProbs[activeInputIndex].userAnswer.length < 3) {
@@ -76,6 +107,8 @@ export default function LearningScreen() {
 
   const handleDelete = () => {
     if (activeInputIndex === null) return;
+    setIsSubmitted(false);
+    
     setProblems(prev => {
       const newProbs = [...prev];
       newProbs[activeInputIndex].userAnswer = newProbs[activeInputIndex].userAnswer.slice(0, -1);
@@ -87,38 +120,43 @@ export default function LearningScreen() {
     setActiveInputIndex(null);
   };
 
-  // HÀM CHẤM ĐIỂM ĐÃ ĐƯỢC NÂNG CẤP CHỐNG VĂNG APP
   const handleSubmit = () => {
-    // 1. Ép ẩn bàn phím ảo (Numpad) đi để tránh xung đột UI trên iOS
     setActiveInputIndex(null);
 
-    // 2. Kiểm tra xem bé làm xong chưa
     const isCompleted = problems.every(p => p.userAnswer !== '');
     if (!isCompleted) {
-      // Dùng Alert chuẩn của React Native, có thêm mảng nút bấm (Buttons array) để an toàn tuyệt đối
-      Alert.alert(
-        'Khoan đã!', 
-        'Phương Linh chưa làm xong hết 10 câu kìa!',
-        [{ text: 'Dạ vâng', style: 'default' }]
-      ); 
+      if (Platform.OS === 'web') {
+          window.alert('Khoan đã! Phương Linh chưa làm xong hết 10 câu kìa!');
+      } else {
+          Alert.alert(
+            'Khoan đã!', 
+            'Phương Linh chưa làm xong hết 10 câu kìa!',
+            [{ text: 'Dạ vâng', style: 'default' }]
+          ); 
+      }
       return;
     }
 
-    // 3. Tính điểm
     let currentScore = 0;
     problems.forEach(p => {
-      // Ép kiểu an toàn với cơ số 10
       if (p.num1 + p.num2 === parseInt(p.userAnswer, 10)) {
         currentScore += 1;
       }
     });
 
     setScore(currentScore);
+    setIsSubmitted(true);
     
-    // 4. Delay 1 chút xíu (100ms) để hệ thống kịp dọn dẹp bàn phím rồi mới bung Modal kết quả
     setTimeout(() => {
       setShowResultModal(true);
     }, 100);
+  };
+
+  const handleReplay = () => {
+    setShowResultModal(false);
+    setProblems(createNewProblems(maxLimit));
+    
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
   const Numpad = () => (
@@ -167,28 +205,47 @@ export default function LearningScreen() {
 
       <View style={styles.mainContent}>
         <View style={styles.exerciseColumn}>
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {problems.map((p, index) => (
-              <View key={p.id} style={styles.problemRow}>
-                <Text style={[styles.problemText, { color: colors.text }]}>Câu {index + 1}:</Text>
-                <View style={styles.mathExpression}>
-                  <Text style={[styles.mathText, { color: colors.text }]}>{p.num1} + {p.num2} =</Text>
-                  
-                  <TouchableOpacity 
-                    style={[
-                      styles.answerBox, 
-                      activeInputIndex === index && styles.activeAnswerBox,
-                      { backgroundColor: colors.card, borderColor: colors.border }
-                    ]}
-                    onPress={() => setActiveInputIndex(index)}
-                  >
-                    <Text style={[styles.answerText, { color: colors.text }]}>
-                      {p.userAnswer || '?'}
-                    </Text>
-                  </TouchableOpacity>
+          <ScrollView 
+            ref={scrollViewRef} 
+            contentContainerStyle={styles.scrollContent} 
+            showsVerticalScrollIndicator={false}
+          >
+            {problems.map((p, index) => {
+              const correctAnswer = p.num1 + p.num2;
+              const isWrong = isSubmitted && parseInt(p.userAnswer, 10) !== correctAnswer;
+              
+              return (
+                <View key={p.id} style={styles.problemRow}>
+                  <Text style={[styles.problemText, { color: colors.text }]}>Câu {index + 1}:</Text>
+                  <View style={styles.mathExpression}>
+                    <Text style={[styles.mathText, { color: colors.text }]}>{p.num1} + {p.num2} =</Text>
+                    
+                    <TouchableOpacity 
+                      style={[
+                        styles.answerBox, 
+                        activeInputIndex === index && styles.activeAnswerBox,
+                        isWrong && styles.wrongAnswerBox, 
+                        { backgroundColor: colors.card, borderColor: activeInputIndex === index ? '#1D4ED8' : isWrong ? '#EF4444' : colors.border }
+                      ]}
+                      onPress={() => setActiveInputIndex(index)}
+                    >
+                      <Text style={[
+                          styles.answerText, 
+                          isWrong ? { color: '#EF4444' } : { color: colors.text } 
+                      ]}>
+                        {p.userAnswer || '?'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {isWrong && (
+                      <View style={styles.correctionBadge}>
+                        <Text style={styles.correctionText}>Đáp án: {correctAnswer}</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
 
             <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
               <Text style={styles.submitBtnText}>🏆 CHẤM ĐIỂM 🏆</Text>
@@ -210,14 +267,12 @@ export default function LearningScreen() {
         </View>
       </View>
 
-      {/* POPUP KẾT QUẢ HIỆN LÊN SAU KHI CHẤM ĐIỂM */}
-      {/* Đã thêm transparent={true} để an toàn trên mọi thiết bị */}
       <Modal visible={showResultModal} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>🎉 KẾT QUẢ 🎉</Text>
             
-            <Text style={styles.scoreText}>{score} / 10</Text>
+            <Text style={styles.scoreText}>{score}</Text>
             
             <Text style={styles.messageText}>
               {score === 10 ? 'Quá đỉnh! Phương Linh đạt điểm tuyệt đối! 🌟' : 
@@ -227,12 +282,16 @@ export default function LearningScreen() {
             
             <TouchableOpacity 
               style={styles.replayBtn} 
-              onPress={() => {
-                setShowResultModal(false);
-                setProblems(createNewProblems(maxLimit)); 
-              }}
+              onPress={handleReplay}
             >
               <Text style={styles.replayBtnText}>Làm Lại Bài Mới 🔄</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={{ marginTop: 15 }} 
+              onPress={() => setShowResultModal(false)}
+            >
+              <Text style={{ color: 'gray', fontSize: 16 }}>Đóng để xem lại bài</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -254,8 +313,15 @@ const styles = StyleSheet.create({
   mathExpression: { flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-start' },
   mathText: { fontSize: 32, fontWeight: 'bold', letterSpacing: 2, marginRight: 15 },
   answerBox: { width: 80, height: 60, borderWidth: 3, borderRadius: 15, justifyContent: 'center', alignItems: 'center', backgroundColor: 'white' },
-  activeAnswerBox: { borderColor: '#3B82F6', backgroundColor: '#EFF6FF', shadowColor: '#3B82F6', shadowOffset: {width: 0, height: 0}, shadowOpacity: 0.5, shadowRadius: 10, elevation: 5 },
+  
+  activeAnswerBox: { borderWidth: 4, backgroundColor: '#DBEAFE', shadowColor: '#1D4ED8', shadowOffset: {width: 0, height: 0}, shadowOpacity: 0.6, shadowRadius: 10, elevation: 6 },
+  wrongAnswerBox: { backgroundColor: '#FEF2F2' },
+  
   answerText: { fontSize: 32, fontWeight: 'bold' },
+  
+  correctionBadge: { marginLeft: 15, backgroundColor: '#DCFCE7', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: '#22C55E' },
+  correctionText: { color: '#15803D', fontSize: 18, fontWeight: 'bold' },
+
   submitBtn: { backgroundColor: '#F59E0B', paddingVertical: 15, borderRadius: 20, alignItems: 'center', marginTop: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 8 },
   submitBtnText: { color: 'white', fontSize: 24, fontWeight: '900' },
   
@@ -269,7 +335,7 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: 'white', padding: 30, borderRadius: 25, alignItems: 'center', width: 350, borderWidth: 6, borderColor: '#FCD34D' },
   modalTitle: { fontSize: 32, fontWeight: '900', color: '#F59E0B', marginBottom: 10 },
-  scoreText: { fontSize: 65, fontWeight: 'bold', color: '#EF4444', marginBottom: 10 },
+  scoreText: { fontSize: 90, fontWeight: '900', color: '#EF4444', marginBottom: 10 },
   messageText: { fontSize: 22, textAlign: 'center', color: '#4B5563', marginBottom: 25, fontWeight: '700' },
   replayBtn: { backgroundColor: '#10B981', paddingVertical: 15, paddingHorizontal: 30, borderRadius: 15, shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 },
   replayBtnText: { color: 'white', fontSize: 20, fontWeight: 'bold' }
