@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Switch, TouchableOpacity, Alert, StyleSheet, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, Switch, TouchableOpacity, Alert, StyleSheet, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabaseConfig';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +21,6 @@ export default function SettingsScreen() {
       setUserEmail(user.email || 'Chưa cập nhật email');
       setUserId(user.id);
       
-      // Lấy cài đặt giới hạn từ Supabase
       const { data, error } = await supabase
         .from('be_hoc_toan_data')
         .select('max_limit')
@@ -40,7 +39,6 @@ export default function SettingsScreen() {
     setLoading(true);
     const limitNum = parseInt(maxLimit) || 10;
     
-    // Kiểm tra xem đã có dòng data chưa, chưa có thì insert, có rồi thì update
     const { data: existingData } = await supabase.from('be_hoc_toan_data').select('id').eq('user_id', userId).single();
     
     if (existingData) {
@@ -59,7 +57,10 @@ export default function SettingsScreen() {
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: colors.bg }]}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, backgroundColor: colors.bg }}>
+      {/* Bọc toàn bộ nội dung trong ScrollView */}
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        
         <View style={styles.header}>
              <View style={styles.profileIcon}>
                 <Ionicons name="settings" size={40} color="white" />
@@ -67,38 +68,43 @@ export default function SettingsScreen() {
              <Text style={[styles.email, { color: colors.text }]}>{userEmail}</Text>
         </View>
 
-      <View style={[styles.section, { backgroundColor: colors.card }]}>
-        <View style={[styles.row, { marginBottom: 20 }]}>
-          <Text style={{ color: colors.text, fontSize: 18, fontWeight: 'bold' }}>Giới hạn phép toán (VD: 10, 20)</Text>
-          <TextInput 
-            style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-            keyboardType="number-pad"
-            value={maxLimit}
-            onChangeText={setMaxLimit}
-            maxLength={3}
-          />
+        <View style={[styles.section, { backgroundColor: colors.card }]}>
+          <View style={[styles.row, { marginBottom: 20 }]}>
+            <Text style={{ color: colors.text, fontSize: 18, fontWeight: 'bold' }}>Giới hạn phép toán</Text>
+            <TextInput 
+              style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+              keyboardType="number-pad"
+              value={maxLimit}
+              onChangeText={setMaxLimit}
+              maxLength={3}
+            />
+          </View>
+          <TouchableOpacity style={styles.saveBtn} onPress={handleSaveSettings} disabled={loading}>
+            <Text style={styles.saveText}>{loading ? 'Đang lưu...' : 'Lưu Cài Đặt'}</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSaveSettings} disabled={loading}>
-          <Text style={styles.saveText}>{loading ? 'Đang lưu...' : 'Lưu Cài Đặt'}</Text>
+
+        <View style={[styles.section, { backgroundColor: colors.card }]}>
+          <View style={styles.row}>
+            <Text style={{ color: colors.text, fontSize: 16 }}>Chế độ tối (Dark Mode)</Text>
+            <Switch value={theme === 'dark'} onValueChange={toggleTheme} />
+          </View>
+        </View>
+
+        {/* Cục Spacer này dùng để đẩy nút Đăng xuất xuống sát dưới cùng */}
+        <View style={{ flex: 1, minHeight: 40 }} />
+
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <Text style={styles.logoutText}>Đăng Xuất</Text>
         </TouchableOpacity>
-      </View>
 
-      <View style={[styles.section, { backgroundColor: colors.card }]}>
-        <View style={styles.row}>
-          <Text style={{ color: colors.text, fontSize: 16 }}>Chế độ tối (Dark Mode)</Text>
-          <Switch value={theme === 'dark'} onValueChange={toggleTheme} />
-        </View>
-      </View>
-
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Đăng Xuất</Text>
-      </TouchableOpacity>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
+  scrollContent: { flexGrow: 1, padding: 20 },
   header: { alignItems: 'center', marginVertical: 20 },
   profileIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
   email: { fontSize: 18, fontWeight: '600' },
@@ -107,6 +113,6 @@ const styles = StyleSheet.create({
   input: { borderWidth: 2, borderRadius: 10, paddingHorizontal: 15, paddingVertical: 10, fontSize: 18, width: 80, textAlign: 'center', fontWeight: 'bold' },
   saveBtn: { backgroundColor: '#3B82F6', padding: 15, borderRadius: 10, alignItems: 'center' },
   saveText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-  logoutBtn: { backgroundColor: '#EF4444', padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 'auto' },
+  logoutBtn: { backgroundColor: '#EF4444', padding: 15, borderRadius: 10, alignItems: 'center', marginBottom: 20 },
   logoutText: { color: 'white', fontWeight: 'bold', fontSize: 16 }
 });
