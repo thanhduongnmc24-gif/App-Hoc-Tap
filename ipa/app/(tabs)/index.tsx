@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform, Alert } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabaseConfig';
 import { Ionicons } from '@expo/vector-icons';
@@ -63,7 +63,7 @@ export default function LearningScreen() {
       // Ép số thứ hai chạy từ 1 đến (limit - num1)
       let num2 = Math.floor(Math.random() * (limit - num1)) + 1;
       
-      // Đề phòng trường hợp anh hai lỡ cài limit = 1 (quá nhỏ)
+      // Đề phòng trường hợp anh hai lỡ cài limit quá nhỏ
       if (limit <= 1) { num1 = 0; num2 = 1; }
 
       newProblems.push({ id: i, num1, num2, userAnswer: '' });
@@ -101,7 +101,7 @@ export default function LearningScreen() {
       if (Platform.OS === 'web') {
           window.alert('Khoan đã! Phương Linh chưa làm xong hết 10 câu kìa!');
       } else {
-          alert('Khoan đã! Phương Linh chưa làm xong hết 10 câu kìa!'); 
+          Alert.alert('Khoan đã!', 'Phương Linh chưa làm xong hết 10 câu kìa!'); 
       }
       return;
     }
