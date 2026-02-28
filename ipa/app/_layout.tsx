@@ -13,8 +13,10 @@ export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
 
+  // TÈO ĐÃ NẠP FONT CHỮ TẬP VIẾT VÀO ĐÂY NÈ
   const [fontsLoaded] = useFonts({
     ...Ionicons.font,
+    'HP001': require('../assets/fonts/HP001.ttf'), 
   });
 
   useEffect(() => {

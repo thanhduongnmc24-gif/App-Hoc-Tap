@@ -32,6 +32,17 @@ export default function TabLayout() {
           }} 
         />
 
+        {/* TAB TIẾNG VIỆT MỚI TONE-SUR-TON */}
+        <Tabs.Screen 
+          name="tiengviet" 
+          options={{ 
+            title: 'Tiếng Việt', 
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? "book" : "book-outline"} size={28} color={color} /> 
+            ) 
+          }} 
+        />
+
         <Tabs.Screen 
           name="settings" 
           options={{ 
