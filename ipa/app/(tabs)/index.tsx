@@ -1,11 +1,14 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform, Image } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-// Import pháo giấy xịn xò
 import ConfettiCannon from 'react-native-confetti-cannon';
+import { Asset } from 'expo-asset';
+
+// Import từ kho ảnh vừa tạo
+import { GIOI_IMAGES, TOT_IMAGES, CAN_CO_GAN_IMAGES, ALL_IMAGES } from '../../constants/kho_anh';
 
 type Problem = {
   id: number;
@@ -13,15 +16,6 @@ type Problem = {
   num2: number;
   userAnswer: string;
 };
-
-// Kho ảnh tấu hài ngẫu nhiên cho bé
-const FUNNY_IMAGES = [
-  'https://media.tenor.com/2sXG-d5N5mIAAAAi/capybara-spa.gif',
-  'https://media.tenor.com/OqG3p011g9EAAAAi/cat-funny.gif',
-  'https://media.tenor.com/8QG34t8Nq9QAAAAi/capybara-ok.gif',
-  'https://media.tenor.com/yF-mUOrQ2zAAAAAi/funny-cat.gif',
-  'https://media.tenor.com/1-qWjA-h_O0AAAAi/capybara-dance.gif'
-];
 
 export default function LearningScreen() {
   const { colors } = useTheme();
@@ -31,9 +25,22 @@ export default function LearningScreen() {
   
   const [score, setScore] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [randomImage, setRandomImage] = useState(FUNNY_IMAGES[0]);
+  
+  const [randomImage, setRandomImage] = useState(GIOI_IMAGES[0]); // Ảnh tạm lúc đầu
   
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Nạp trước TẤT CẢ ảnh vào RAM để khi chấm điểm bung ra cái vèo
+  useEffect(() => {
+    const preloadImages = async () => {
+      try {
+        await Asset.loadAsync(ALL_IMAGES);
+      } catch (e) {
+        console.warn('Lỗi tải trước ảnh:', e);
+      }
+    };
+    preloadImages();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -152,11 +159,22 @@ export default function LearningScreen() {
     setScore(currentScore);
     setIsSubmitted(true);
     
-    // Bốc ngẫu nhiên một tấm ảnh hài hước
-    const randomImg = FUNNY_IMAGES[Math.floor(Math.random() * FUNNY_IMAGES.length)];
-    setRandomImage(randomImg);
+    // Tự động chọn rổ ảnh theo mức điểm
+    let selectedImageArray;
+    if (currentScore >= 9) {
+      selectedImageArray = GIOI_IMAGES;
+    } else if (currentScore >= 6) {
+      selectedImageArray = TOT_IMAGES;
+    } else {
+      selectedImageArray = CAN_CO_GAN_IMAGES;
+    }
+
+    // Nếu anh hai lỡ quên bỏ ảnh vào rổ, Tèo chống văng app bằng cách kiểm tra
+    if (selectedImageArray && selectedImageArray.length > 0) {
+        const randomImg = selectedImageArray[Math.floor(Math.random() * selectedImageArray.length)];
+        setRandomImage(randomImg);
+    }
     
-    // Kéo lên trên cùng để bé xem lại từ câu 1
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
@@ -203,7 +221,6 @@ export default function LearningScreen() {
     </View>
   );
 
-  // Giao diện bảng điểm mới nằm gọn bên phải
   const ScoreBoard = () => (
     <View style={styles.scoreBoardContainer}>
       {score === 10 && (
@@ -219,14 +236,16 @@ export default function LearningScreen() {
       
       <Text style={styles.scoreText}>{score}</Text>
       
-      <Image 
-        source={{ uri: randomImage }} 
-        style={styles.funnyImage} 
-      />
+      {randomImage && (
+        <Image 
+            source={randomImage} 
+            style={styles.funnyImage} 
+        />
+      )}
       
       <Text style={styles.messageText}>
-        {score === 10 ? 'Tuyệt vời! Phương Linh 10 điểm! 🌟' : 
-         score >= 7 ? 'Giỏi lắm! Cố xíu nữa nhé! 💪' : 
+        {score >= 9 ? 'Xuất sắc! Phương Linh quá đỉnh! 🌟' : 
+         score >= 6 ? 'Giỏi lắm! Cố xíu nữa nhé! 💪' : 
          'Lần sau cẩn thận hơn nha bé! 🎈'}
       </Text>
       
@@ -243,7 +262,6 @@ export default function LearningScreen() {
       </View>
 
       <View style={styles.mainContent}>
-        {/* CỘT BÊN TRÁI: DANH SÁCH CÂU HỎI */}
         <View style={styles.exerciseColumn}>
           <ScrollView 
             ref={scrollViewRef} 
@@ -256,7 +274,6 @@ export default function LearningScreen() {
               
               return (
                 <View key={p.id} style={styles.problemRow}>
-                  {/* Tèo đã nới rộng width lên 105 để câu 10 không bị lệch hàng nữa */}
                   <Text style={[styles.problemText, { color: colors.text }]}>Câu {index + 1}:</Text>
                   <View style={styles.mathExpression}>
                     <Text style={[styles.mathText, { color: colors.text }]}>{p.num1} + {p.num2} =</Text>
@@ -271,7 +288,7 @@ export default function LearningScreen() {
                       onPress={() => {
                         if (!isSubmitted) setActiveInputIndex(index);
                       }}
-                      disabled={isSubmitted} // Nộp bài rồi thì khóa không cho bấm vào ô trống nữa
+                      disabled={isSubmitted} 
                     >
                       <Text style={[
                           styles.answerText, 
@@ -299,7 +316,6 @@ export default function LearningScreen() {
           </ScrollView>
         </View>
 
-        {/* CỘT BÊN PHẢI: LINH HOẠT THAY ĐỔI */}
         <View style={styles.numpadColumn}>
           {isSubmitted ? (
              <ScoreBoard />
@@ -328,10 +344,7 @@ const styles = StyleSheet.create({
   numpadColumn: { flex: 2, justifyContent: 'center', alignItems: 'center', borderLeftWidth: 2, borderLeftColor: '#E5E7EB', paddingLeft: 15 },
   scrollContent: { paddingBottom: 50 },
   problemRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, backgroundColor: 'rgba(255,255,255,0.5)', padding: 10, borderRadius: 15 },
-  
-  // Tăng width lên 105 để cân bằng độ dài chữ "Câu 10"
   problemText: { fontSize: 22, fontWeight: 'bold', width: 105, color: '#4B5563' },
-  
   mathExpression: { flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-start' },
   mathText: { fontSize: 32, fontWeight: 'bold', letterSpacing: 2, marginRight: 15 },
   answerBox: { width: 80, height: 60, borderWidth: 3, borderRadius: 15, justifyContent: 'center', alignItems: 'center', backgroundColor: 'white' },
@@ -350,7 +363,6 @@ const styles = StyleSheet.create({
   numpadText: { fontSize: 30, fontWeight: 'bold', color: '#1F2937' },
   placeholderNumpad: { alignItems: 'center', justifyContent: 'center', flex: 1 },
 
-  // Giao diện bảng điểm bên phải
   scoreBoardContainer: { width: '100%', maxWidth: 350, backgroundColor: 'white', padding: 20, borderRadius: 25, alignItems: 'center', borderWidth: 5, borderColor: '#FCD34D', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 8 },
   modalTitle: { fontSize: 28, fontWeight: '900', color: '#F59E0B', marginBottom: 5 },
   scoreText: { fontSize: 70, fontWeight: '900', color: '#EF4444', marginBottom: 10 },
