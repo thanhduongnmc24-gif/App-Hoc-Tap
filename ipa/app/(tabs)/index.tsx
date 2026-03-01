@@ -1,14 +1,20 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform, Image, Modal, Dimensions } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import { Asset } from 'expo-asset';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Video, ResizeMode } from 'expo-av'; 
 
-// Import từ kho ảnh vừa tạo
+// Import kho ảnh và kho video
 import { GIOI_IMAGES, TOT_IMAGES, CAN_CO_GAN_IMAGES, ALL_IMAGES } from '../../constants/kho_anh';
+import { GIOI_VIDEOS, TOT_VIDEOS, CAN_CO_GAN_VIDEOS } from '../../constants/kho_video';
+
+// Tèo khai báo cây thước đo màn hình ở đây nè đại ca
+const { width } = Dimensions.get('window');
 
 type Problem = {
   id: number;
@@ -26,27 +32,43 @@ export default function LearningScreen() {
   const [score, setScore] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
   
-  const [randomImage, setRandomImage] = useState(GIOI_IMAGES[0]); // Ảnh tạm lúc đầu
+  // Chứa Ảnh và Video ngẫu nhiên bốc từ kho ra
+  const [randomImage, setRandomImage] = useState(GIOI_IMAGES[0]); 
+  const [randomVideo, setRandomVideo] = useState<any>(null); 
   
+  const [childName, setChildName] = useState('Bé yêu');
+  const [showVideoPopup, setShowVideoPopup] = useState(false);
+
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // Nạp trước TẤT CẢ ảnh vào RAM để khi chấm điểm bung ra cái vèo
   useEffect(() => {
-    const preloadImages = async () => {
+    const preloadAssets = async () => {
       try {
         await Asset.loadAsync(ALL_IMAGES);
       } catch (e) {
-        console.warn('Lỗi tải trước ảnh:', e);
+        console.warn('Lỗi tải trước tài nguyên:', e);
       }
     };
-    preloadImages();
+    preloadAssets();
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       fetchLimit();
+      fetchChildName(); 
     }, [])
   );
+
+  const fetchChildName = async () => {
+    try {
+      const savedName = await AsyncStorage.getItem('childName');
+      if (savedName) {
+        setChildName(savedName);
+      }
+    } catch (e) {
+      console.log('Không lấy được tên bé', e);
+    }
+  };
 
   const fetchLimit = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -138,13 +160,9 @@ export default function LearningScreen() {
     const isCompleted = problems.every(p => p.userAnswer !== '');
     if (!isCompleted) {
       if (Platform.OS === 'web') {
-          window.alert('Khoan đã! Phương Linh chưa làm xong hết 10 câu kìa!');
+          window.alert(`Khoan đã! ${childName} chưa làm xong hết 10 câu kìa!`);
       } else {
-          Alert.alert(
-            'Khoan đã!', 
-            'Phương Linh chưa làm xong hết 10 câu kìa!',
-            [{ text: 'Dạ vâng', style: 'default' }]
-          ); 
+          Alert.alert('Khoan đã!', `${childName} chưa làm xong hết 10 câu kìa!`, [{ text: 'Dạ vâng', style: 'default' }]); 
       }
       return;
     }
@@ -159,28 +177,45 @@ export default function LearningScreen() {
     setScore(currentScore);
     setIsSubmitted(true);
     
-    // Tự động chọn rổ ảnh theo mức điểm
     let selectedImageArray;
+    let selectedVideoArray;
+
     if (currentScore >= 9) {
       selectedImageArray = GIOI_IMAGES;
+      selectedVideoArray = GIOI_VIDEOS;
     } else if (currentScore >= 6) {
       selectedImageArray = TOT_IMAGES;
+      selectedVideoArray = TOT_VIDEOS;
     } else {
       selectedImageArray = CAN_CO_GAN_IMAGES;
+      selectedVideoArray = CAN_CO_GAN_VIDEOS;
     }
 
-    // Nếu anh hai lỡ quên bỏ ảnh vào rổ, Tèo chống văng app bằng cách kiểm tra
     if (selectedImageArray && selectedImageArray.length > 0) {
-        const randomImg = selectedImageArray[Math.floor(Math.random() * selectedImageArray.length)];
-        setRandomImage(randomImg);
+        const randImg = selectedImageArray[Math.floor(Math.random() * selectedImageArray.length)];
+        setRandomImage(randImg);
+    }
+
+    if (selectedVideoArray && selectedVideoArray.length > 0) {
+        const randVid = selectedVideoArray[Math.floor(Math.random() * selectedVideoArray.length)];
+        setRandomVideo(randVid);
+    } else {
+        setRandomVideo(null); 
     }
     
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+
+    setTimeout(() => {
+      if (selectedVideoArray && selectedVideoArray.length > 0) {
+        setShowVideoPopup(true);
+      }
+    }, 1000); 
   };
 
   const handleReplay = () => {
     setProblems(createNewProblems(maxLimit));
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    setShowVideoPopup(false); 
   };
 
   const Numpad = () => (
@@ -218,37 +253,28 @@ export default function LearningScreen() {
           <Text style={[styles.numpadText, { color: 'white' }]}>OK</Text>
         </TouchableOpacity>
       </View>
+      
+      <View style={styles.submitContainer}>
+        <TouchableOpacity style={styles.submitBtnRight} onPress={handleSubmit} activeOpacity={0.8}>
+          <Text style={styles.submitBtnRightText}>🏆 CHẤM ĐIỂM 🏆</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
   const ScoreBoard = () => (
     <View style={styles.scoreBoardContainer}>
       {score === 10 && (
-        <ConfettiCannon 
-          count={200} 
-          origin={{x: -10, y: 0}} 
-          fallSpeed={2500} 
-          fadeOut={true} 
-          autoStart={true} 
-        />
+        <ConfettiCannon count={200} origin={{x: -10, y: 0}} fallSpeed={2500} fadeOut={true} autoStart={true} />
       )}
       <Text style={styles.modalTitle}>🎉 KẾT QUẢ 🎉</Text>
-      
       <Text style={styles.scoreText}>{score}</Text>
-      
-      {randomImage && (
-        <Image 
-            source={randomImage} 
-            style={styles.funnyImage} 
-        />
-      )}
-      
+      {randomImage && <Image source={randomImage} style={styles.funnyImage} />}
       <Text style={styles.messageText}>
-        {score >= 9 ? 'Xuất sắc! Phương Linh quá đỉnh! 🌟' : 
-         score >= 6 ? 'Giỏi lắm! Cố xíu nữa nhé! 💪' : 
-         'Lần sau cẩn thận hơn nha bé! 🎈'}
+        {score >= 9 ? `Xuất sắc! ${childName} quá đỉnh! 🌟` : 
+         score >= 6 ? `Giỏi lắm ${childName}! Ráng đúng hết nha! 💪` : 
+         `${childName} ơi cẩn thận hơn nha bé! 🎈`}
       </Text>
-      
       <TouchableOpacity style={styles.replayBtn} onPress={handleReplay}>
         <Text style={styles.replayBtnText}>Làm Lại Bài Mới 🔄</Text>
       </TouchableOpacity>
@@ -258,16 +284,12 @@ export default function LearningScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>📚 Bé Học Toán 📚</Text>
+        <Text style={[styles.title, { color: colors.text }]}>📚 {childName} Học Toán 📚</Text>
       </View>
 
       <View style={styles.mainContent}>
         <View style={styles.exerciseColumn}>
-          <ScrollView 
-            ref={scrollViewRef} 
-            contentContainerStyle={styles.scrollContent} 
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {problems.map((p, index) => {
               const correctAnswer = p.num1 + p.num2;
               const isWrong = isSubmitted && parseInt(p.userAnswer, 10) !== correctAnswer;
@@ -285,34 +307,23 @@ export default function LearningScreen() {
                         isWrong && styles.wrongAnswerBox, 
                         { backgroundColor: colors.card, borderColor: activeInputIndex === index ? '#1D4ED8' : isWrong ? '#EF4444' : colors.border }
                       ]}
-                      onPress={() => {
-                        if (!isSubmitted) setActiveInputIndex(index);
-                      }}
+                      onPress={() => { if (!isSubmitted) setActiveInputIndex(index); }}
                       disabled={isSubmitted} 
                     >
-                      <Text style={[
-                          styles.answerText, 
-                          isWrong ? { color: '#EF4444' } : { color: colors.text } 
-                      ]}>
+                      <Text style={[styles.answerText, isWrong ? { color: '#EF4444' } : { color: colors.text }]}>
                         {p.userAnswer || '?'}
                       </Text>
                     </TouchableOpacity>
 
                     {isWrong && (
                       <View style={styles.correctionBadge}>
-                        <Text style={styles.correctionText}>Đáp án: {correctAnswer}</Text>
+                        <Text style={styles.correctionText}>{correctAnswer}</Text>
                       </View>
                     )}
                   </View>
                 </View>
               );
             })}
-
-            {!isSubmitted && (
-              <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                <Text style={styles.submitBtnText}>🏆 CHẤM ĐIỂM 🏆</Text>
-              </TouchableOpacity>
-            )}
           </ScrollView>
         </View>
 
@@ -331,6 +342,31 @@ export default function LearningScreen() {
           )}
         </View>
       </View>
+
+      {/* ========================================================================= */}
+      {/* POPUP VIDEO 1/3 MÀN HÌNH XINH XẮN */}
+      {/* ========================================================================= */}
+      <Modal visible={showVideoPopup && randomVideo !== null} transparent={true} animationType="fade">
+        <View style={styles.videoOverlay}>
+          <View style={styles.videoWrapper}>
+            <Video
+              source={randomVideo} 
+              style={styles.smallVideo}
+              resizeMode={ResizeMode.CONTAIN} 
+              shouldPlay
+              onPlaybackStatusUpdate={(status) => {
+                if (status.isLoaded && status.didJustFinish) {
+                  setShowVideoPopup(false);
+                }
+              }}
+            />
+            <TouchableOpacity style={styles.skipVideoBtn} onPress={() => setShowVideoPopup(false)}>
+              <Text style={styles.skipVideoText}>X</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -343,7 +379,8 @@ const styles = StyleSheet.create({
   exerciseColumn: { flex: 3, paddingRight: 15 },
   numpadColumn: { flex: 2, justifyContent: 'center', alignItems: 'center', borderLeftWidth: 2, borderLeftColor: '#E5E7EB', paddingLeft: 15 },
   scrollContent: { paddingBottom: 50 },
-  problemRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, backgroundColor: 'rgba(255,255,255,0.5)', padding: 10, borderRadius: 15 },
+  
+  problemRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, backgroundColor: 'rgba(255,255,255,0.5)', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 15 },
   problemText: { fontSize: 22, fontWeight: 'bold', width: 105, color: '#4B5563' },
   mathExpression: { flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-start' },
   mathText: { fontSize: 32, fontWeight: 'bold', letterSpacing: 2, marginRight: 15 },
@@ -351,10 +388,8 @@ const styles = StyleSheet.create({
   activeAnswerBox: { borderWidth: 4, backgroundColor: '#DBEAFE', shadowColor: '#1D4ED8', shadowOffset: {width: 0, height: 0}, shadowOpacity: 0.6, shadowRadius: 10, elevation: 6 },
   wrongAnswerBox: { backgroundColor: '#FEF2F2' },
   answerText: { fontSize: 32, fontWeight: 'bold' },
-  correctionBadge: { marginLeft: 15, backgroundColor: '#DCFCE7', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: '#22C55E' },
-  correctionText: { color: '#15803D', fontSize: 18, fontWeight: 'bold' },
-  submitBtn: { backgroundColor: '#F59E0B', paddingVertical: 15, borderRadius: 20, alignItems: 'center', marginTop: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 8 },
-  submitBtnText: { color: 'white', fontSize: 24, fontWeight: '900' },
+  correctionBadge: { marginLeft: 15, backgroundColor: '#DCFCE7', width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#22C55E' },
+  correctionText: { color: '#15803D', fontSize: 24, fontWeight: '900' }, 
   
   numpadContainer: { width: '100%', maxWidth: 350, backgroundColor: '#F3F4F6', padding: 15, borderRadius: 20, borderWidth: 2, borderColor: '#D1D5DB' },
   numpadTitle: { textAlign: 'center', fontSize: 20, fontWeight: 'bold', marginBottom: 15, color: '#374151' },
@@ -363,11 +398,53 @@ const styles = StyleSheet.create({
   numpadText: { fontSize: 30, fontWeight: 'bold', color: '#1F2937' },
   placeholderNumpad: { alignItems: 'center', justifyContent: 'center', flex: 1 },
 
+  submitContainer: { width: '100%', alignItems: 'center', paddingTop: 15 },
+  submitBtnRight: { width: '100%', backgroundColor: '#F59E0B', paddingVertical: 18, borderRadius: 15, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5 },
+  submitBtnRightText: { color: 'white', fontSize: 24, fontWeight: '900' },
+
   scoreBoardContainer: { width: '100%', maxWidth: 350, backgroundColor: 'white', padding: 20, borderRadius: 25, alignItems: 'center', borderWidth: 5, borderColor: '#FCD34D', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 8 },
   modalTitle: { fontSize: 28, fontWeight: '900', color: '#F59E0B', marginBottom: 5 },
   scoreText: { fontSize: 70, fontWeight: '900', color: '#EF4444', marginBottom: 10 },
   funnyImage: { width: 150, height: 150, borderRadius: 15, marginBottom: 15 },
   messageText: { fontSize: 20, textAlign: 'center', color: '#4B5563', marginBottom: 20, fontWeight: '700' },
   replayBtn: { backgroundColor: '#10B981', paddingVertical: 15, paddingHorizontal: 25, borderRadius: 15, width: '100%', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 },
-  replayBtnText: { color: 'white', fontSize: 18, fontWeight: 'bold' }
+  replayBtnText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+
+  // STYLES CHO VIDEO POPUP
+  videoOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)', 
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoWrapper: {
+    width: width * 0.3,   
+    height: width * 0.3 * (9/16), 
+    backgroundColor: '#000', 
+    borderRadius: 20,
+    overflow: 'hidden', 
+    elevation: 10, 
+    shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.5, shadowRadius: 10,
+  },
+  smallVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  skipVideoBtn: {
+    position: 'absolute',
+    top: 10, 
+    right: 10,
+    backgroundColor: 'rgba(255,255,255,0.3)', 
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10, 
+  },
+  skipVideoText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold'
+  }
 });

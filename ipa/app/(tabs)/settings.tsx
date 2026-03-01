@@ -10,7 +10,7 @@ export default function SettingsScreen() {
   const [userEmail, setUserEmail] = useState('');
   const [userId, setUserId] = useState('');
   const [maxLimit, setMaxLimit] = useState('10');
-  const [childName, setChildName] = useState('Phương Linh'); // Tên mặc định của bé
+  const [childName, setChildName] = useState('Phương Linh'); 
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -46,29 +46,32 @@ export default function SettingsScreen() {
     }
   };
 
+  // TÈO SỬA LẠI HÀM LƯU NÀY CHO CHUẨN MỰC
   const handleSaveSettings = async () => {
     if (!userId) return;
     setLoading(true);
     
-    // Lưu tên bé vào bộ nhớ máy (Offline)
     try {
+      // 1. Lưu tên bé vào bộ nhớ máy (Offline) - THỐNG NHẤT XÀI KEY 'childName'
       await AsyncStorage.setItem('childName', childName);
-    } catch (e) {
-      console.log('Lỗi lưu tên bé:', e);
-    }
 
-    // Lưu giới hạn toán lên Supabase
-    const limitNum = parseInt(maxLimit) || 10;
-    const { data: existingData } = await supabase.from('be_hoc_toan_data').select('id').eq('user_id', userId).single();
-    
-    if (existingData) {
-        await supabase.from('be_hoc_toan_data').update({ max_limit: limitNum }).eq('id', existingData.id);
-    } else {
-        await supabase.from('be_hoc_toan_data').insert([{ user_id: userId, max_limit: limitNum }]);
+      // 2. Lưu giới hạn toán lên Supabase
+      const limitNum = parseInt(maxLimit) || 10;
+      const { data: existingData } = await supabase.from('be_hoc_toan_data').select('id').eq('user_id', userId).single();
+      
+      if (existingData) {
+          await supabase.from('be_hoc_toan_data').update({ max_limit: limitNum }).eq('id', existingData.id);
+      } else {
+          await supabase.from('be_hoc_toan_data').insert([{ user_id: userId, max_limit: limitNum }]);
+      }
+      
+      Alert.alert('Thành công', 'Đã lưu cấu hình học tập cho bé!');
+    } catch (e) {
+      console.log('Lỗi lưu cài đặt:', e);
+      Alert.alert('Lỗi', 'Không thể lưu cài đặt, vui lòng thử lại.');
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
-    Alert.alert('Thành công', 'Đã lưu cấu hình học tập cho bé!');
   };
 
   const handleLogout = async () => {
@@ -87,7 +90,6 @@ export default function SettingsScreen() {
              <Text style={[styles.email, { color: colors.text }]}>{userEmail}</Text>
         </View>
 
-        {/* THÊM KHUNG NHẬP TÊN CHO BÉ */}
         <View style={[styles.section, { backgroundColor: colors.card }]}>
           <View style={[styles.row, { marginBottom: 15 }]}>
             <Text style={{ color: colors.text, fontSize: 18, fontWeight: 'bold' }}>Tên của bé:</Text>
