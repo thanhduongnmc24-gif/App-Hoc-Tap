@@ -418,8 +418,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   videoWrapper: {
-    width: width * 0.3,   
-    height: width * 0.3 * (9/16), 
+    width: width * 0.5,   
+    height: width * 0.5 * (9/16), 
     backgroundColor: '#000', 
     borderRadius: 20,
     overflow: 'hidden', 

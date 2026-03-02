@@ -2,7 +2,7 @@
 
 export const GIOI_VIDEOS = [
   require('../assets/videos/gioi_1.mp4'),
-  // require('../assets/videos/gioi_2.mp4'), // Có thêm thì anh hai bỏ dấu // đi nha
+  require('../assets/videos/gioi_2.mp4'), // Có thêm thì anh hai bỏ dấu // đi nha
 ];
 
 export const TOT_VIDEOS = [
