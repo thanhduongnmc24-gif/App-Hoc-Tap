@@ -2,7 +2,8 @@
 
 export const GIOI_VIDEOS = [
   require('../assets/videos/gioi_1.mp4'),
-  require('../assets/videos/gioi_2.mp4'), // Có thêm thì anh hai bỏ dấu // đi nha
+  require('../assets/videos/gioi_2.mp4'), 
+  require('../assets/videos/gioi_3.mp4'),
 ];
 
 export const TOT_VIDEOS = [
@@ -11,6 +12,8 @@ export const TOT_VIDEOS = [
 
 export const CAN_CO_GAN_VIDEOS = [
   require('../assets/videos/cangang_1.mp4'),
+  require('../assets/videos/cangang_2.mp4'),
+  require('../assets/videos/cangang_3.mp4'),
 ];
 
 // Này để lỡ có xài pre-load mượt mà thì gọi nó
