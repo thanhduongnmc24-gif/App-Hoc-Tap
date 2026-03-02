@@ -13,7 +13,7 @@ import { Video, ResizeMode } from 'expo-av';
 import { GIOI_IMAGES, TOT_IMAGES, CAN_CO_GAN_IMAGES, ALL_IMAGES } from '../../constants/kho_anh';
 import { GIOI_VIDEOS, TOT_VIDEOS, CAN_CO_GAN_VIDEOS } from '../../constants/kho_video';
 
-// Tèo khai báo cây thước đo màn hình ở đây nè đại ca
+// Khai báo cây thước đo chiều rộng màn hình
 const { width } = Dimensions.get('window');
 
 type Problem = {
@@ -32,7 +32,6 @@ export default function LearningScreen() {
   const [score, setScore] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
   
-  // Chứa Ảnh và Video ngẫu nhiên bốc từ kho ra
   const [randomImage, setRandomImage] = useState(GIOI_IMAGES[0]); 
   const [randomVideo, setRandomVideo] = useState<any>(null); 
   
@@ -40,6 +39,11 @@ export default function LearningScreen() {
   const [showVideoPopup, setShowVideoPopup] = useState(false);
 
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // 3 CÁI RỔ NHÁP ĐỂ CHỨA VIDEO CHƯA CHIẾU (CHỐNG LẶP LẠI)
+  const unseenGioi = useRef([...GIOI_VIDEOS]);
+  const unseenTot = useRef([...TOT_VIDEOS]);
+  const unseenCanCoGan = useRef([...CAN_CO_GAN_VIDEOS]);
 
   useEffect(() => {
     const preloadAssets = async () => {
@@ -177,27 +181,47 @@ export default function LearningScreen() {
     setScore(currentScore);
     setIsSubmitted(true);
     
+    // ========================================================
+    // BỐC THĂM KHÔNG TRÙNG LẶP CHO ĐẾN KHI HẾT RỔ VIDEO
+    // ========================================================
     let selectedImageArray;
-    let selectedVideoArray;
+    let originalVideoArray;
+    let unseenRef: React.MutableRefObject<any[]>;
 
     if (currentScore >= 9) {
       selectedImageArray = GIOI_IMAGES;
-      selectedVideoArray = GIOI_VIDEOS;
+      originalVideoArray = GIOI_VIDEOS;
+      unseenRef = unseenGioi;
     } else if (currentScore >= 6) {
       selectedImageArray = TOT_IMAGES;
-      selectedVideoArray = TOT_VIDEOS;
+      originalVideoArray = TOT_VIDEOS;
+      unseenRef = unseenTot;
     } else {
       selectedImageArray = CAN_CO_GAN_IMAGES;
-      selectedVideoArray = CAN_CO_GAN_VIDEOS;
+      originalVideoArray = CAN_CO_GAN_VIDEOS;
+      unseenRef = unseenCanCoGan;
     }
 
+    // 1. Ảnh vẫn bốc ngẫu nhiên (có thể lặp)
     if (selectedImageArray && selectedImageArray.length > 0) {
         const randImg = selectedImageArray[Math.floor(Math.random() * selectedImageArray.length)];
         setRandomImage(randImg);
     }
 
-    if (selectedVideoArray && selectedVideoArray.length > 0) {
-        const randVid = selectedVideoArray[Math.floor(Math.random() * selectedVideoArray.length)];
+    // 2. Video bốc ngẫu nhiên KHÔNG LẶP LẠI
+    if (originalVideoArray && originalVideoArray.length > 0) {
+        // Nếu rổ nháp trống trơn (chiếu hết sạch rồi), đổ đầy lại từ kho gốc
+        if (unseenRef.current.length === 0) {
+            unseenRef.current = [...originalVideoArray];
+        }
+
+        // Bốc đại 1 cái từ rổ nháp
+        const randomIndex = Math.floor(Math.random() * unseenRef.current.length);
+        const randVid = unseenRef.current[randomIndex];
+
+        // Rút thẻ video đó ra khỏi rổ để lần sau không bốc trúng nữa
+        unseenRef.current.splice(randomIndex, 1);
+
         setRandomVideo(randVid);
     } else {
         setRandomVideo(null); 
@@ -205,8 +229,9 @@ export default function LearningScreen() {
     
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
 
+    // Hẹn giờ 1 giây sau bung lụa
     setTimeout(() => {
-      if (selectedVideoArray && selectedVideoArray.length > 0) {
+      if (originalVideoArray && originalVideoArray.length > 0) {
         setShowVideoPopup(true);
       }
     }, 1000); 
@@ -344,7 +369,7 @@ export default function LearningScreen() {
       </View>
 
       {/* ========================================================================= */}
-      {/* POPUP VIDEO 1/3 MÀN HÌNH XINH XẮN */}
+      {/* POPUP VIDEO ĐÃ ÉP VÀO 1 GÓC XINH XẮN THEO ĐÚNG TỈ LỆ */}
       {/* ========================================================================= */}
       <Modal visible={showVideoPopup && randomVideo !== null} transparent={true} animationType="fade">
         <View style={styles.videoOverlay}>
@@ -427,8 +452,11 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.5, shadowRadius: 10,
   },
   smallVideo: {
-    width: '100%',
-    height: '100%',
+    position: 'absolute', // Bùa trói 4 góc cho video không chạy lộn xộn
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   skipVideoBtn: {
     position: 'absolute',
