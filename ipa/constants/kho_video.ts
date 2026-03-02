@@ -6,6 +6,8 @@ export const GIOI_VIDEOS = [
   require('../assets/videos/gioi_3.mp4'),
   require('../assets/videos/gioi_4.mp4'), 
   require('../assets/videos/gioi_5.mp4'),
+  require('../assets/videos/gioi_6.mp4'), 
+  require('../assets/videos/gioi_7.mp4'),
 ];
 
 export const TOT_VIDEOS = [
