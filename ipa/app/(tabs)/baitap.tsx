@@ -109,7 +109,7 @@ export default function BaiTapScreen() {
         for (const key in dotLayouts.current) {
           const dot = dotLayouts.current[key];
           const dist = Math.sqrt(Math.pow(locationX - dot.x, 2) + Math.pow(locationY - dot.y, 2));
-          if (dist < 50) { 
+          if (dist < 60) { // Tăng nhẹ diện tích bắt chạm cho phù hợp giao diện bự hơn
             const color = LINE_COLORS[completedPathsRef.current.length % LINE_COLORS.length];
             const newPath = {
               points: [{ x: dot.x, y: dot.y }],
@@ -148,7 +148,7 @@ export default function BaiTapScreen() {
             const dist = Math.sqrt(Math.pow(locationX - dot.x, 2) + Math.pow(locationY - dot.y, 2));
             const startDot = dotLayouts.current[prevPath.startKey];
             
-            if (dist < 60 && startDot && dot.type !== startDot.type) {
+            if (dist < 70 && startDot && dot.type !== startDot.type) { // Tăng diện tích hít dính cho dễ nối
               hitKey = key;
               break;
             }
@@ -172,9 +172,6 @@ export default function BaiTapScreen() {
               });
               setScore(dung);
 
-              // ========================================================
-              // BỐC THĂM VIDEO CHÚC MỪNG KHÔNG TRÙNG LẶP
-              // ========================================================
               let originalVideoArray;
               let unseenRef: React.MutableRefObject<any[]>;
 
@@ -201,7 +198,6 @@ export default function BaiTapScreen() {
                   setRandomVideo(null); 
               }
               
-              // Hẹn giờ 1 giây sau bung lụa
               setTimeout(() => {
                 if (originalVideoArray && originalVideoArray.length > 0) {
                   setShowVideoPopup(true);
@@ -245,6 +241,7 @@ export default function BaiTapScreen() {
           </Svg>
         </View>
 
+        {/* CỘT TRÁI (Khóa chạm) */}
         <View style={styles.column} pointerEvents="none">
           {leftItems.map((item, index) => {
             const dotKey = `left_${index}`;
@@ -259,6 +256,7 @@ export default function BaiTapScreen() {
           })}
         </View>
 
+        {/* CỘT PHẢI (Khóa chạm) */}
         <View style={styles.column} pointerEvents="none">
           {rightItems.map((item, index) => {
             const dotKey = `right_${index}`;
@@ -266,7 +264,8 @@ export default function BaiTapScreen() {
             
             return (
               <View key={dotKey} style={[styles.itemRow, { justifyContent: 'flex-start' }]}>
-                <View ref={(r) => { dotRefs.current[dotKey] = r; }} style={[styles.dot, { marginRight: 20 }]} onLayout={measureAllDots} />
+                {/* Giảm marginRight của chấm để nhường chỗ cho khoảng trống ở giữa */}
+                <View ref={(r) => { dotRefs.current[dotKey] = r; }} style={[styles.dot, { marginRight: 10 }]} onLayout={measureAllDots} />
                 <View style={styles.wordBox}>
                   <Text style={styles.wordText}>{item.word}</Text>
                 </View>
@@ -294,9 +293,6 @@ export default function BaiTapScreen() {
         </View>
       )}
 
-      {/* ========================================================================= */}
-      {/* POPUP VIDEO CHÚC MỪNG */}
-      {/* ========================================================================= */}
       <Modal visible={showVideoPopup && randomVideo !== null} transparent={true} animationType="fade">
         <View style={styles.videoOverlay}>
           <View style={styles.videoWrapper}>
@@ -331,11 +327,12 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 20,
+    padding: 10, // Giảm padding viền để ưu tiên không gian cho ảnh bự
     backgroundColor: '#F9FAFB',
   },
   column: {
-    width: '45%',
+    // Thu hẹp cột từ 45% xuống 40% để ép khoảng trống ở giữa (gameArea gap) rộng ra gấp đôi
+    width: '40%', 
     justifyContent: 'space-around',
     zIndex: 10,
   },
@@ -343,15 +340,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    height: 100, 
+    height: 180, // Tăng chiều cao hàng từ 100 lên 180 để chứa vừa ảnh bự gấp đôi
   },
   image: {
-    width: 80,
-    height: 80,
-    borderRadius: 15,
+    // KÍCH THƯỚC HÌNH ẢNH TO GẤP ĐÔI (80x80 -> 160x160)
+    width: 160,
+    height: 160,
+    borderRadius: 20,
     borderWidth: 2,
     borderColor: '#E5E7EB',
-    marginRight: 20,
+    // Giảm marginRight để nhường chỗ cho độ rộng của ảnh
+    marginRight: 10, 
     backgroundColor: 'white'
   },
   wordBox: {
@@ -363,6 +362,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   wordText: {
+    // KÍCH THƯỚC CHỮ GIỮ NGUYÊN
     fontSize: 50, 
     fontFamily: 'HP001', 
     color: '#1F2937',
@@ -395,7 +395,6 @@ const styles = StyleSheet.create({
   replayBtn: { backgroundColor: '#3B82F6', paddingVertical: 15, paddingHorizontal: 30, borderRadius: 15 },
   replayBtnText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
 
-  // STYLES CHO VIDEO POPUP
   videoOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)', 
