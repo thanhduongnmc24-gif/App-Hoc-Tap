@@ -1,22 +1,16 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, Dimensions, PanResponder, TouchableOpacity, Alert, Platform } from 'react-native';
+import React, { useState, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, Image, PanResponder, TouchableOpacity, Alert, Platform } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useFocusEffect } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { useFonts } from 'expo-font';
 
-// Import kho tập đọc đại ca xài tool nạp vào
 import { TAP_DOC_DATA } from '../../constants/kho_tap_doc';
 
-const { width, height } = Dimensions.get('window');
-
-// 5 màu siêu chói lóa cho 5 sợi dây nối
 const LINE_COLORS = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
 
 export default function BaiTapScreen() {
   const { colors } = useTheme();
-  
-  // Nạp font chữ tiểu học nét thanh nét đậm
   const [fontsLoaded] = useFonts({
     'HP001': require('../../assets/fonts/HP001.ttf'), 
   });
@@ -24,19 +18,17 @@ export default function BaiTapScreen() {
   const [leftItems, setLeftItems] = useState<any[]>([]);
   const [rightItems, setRightItems] = useState<any[]>([]);
   
-  // Lưu tọa độ của các dấu chấm để dò xem bé có kéo trúng không
   const dotLayouts = useRef<{ [key: string]: { x: number, y: number, word: string, type: 'left' | 'right' } }>({});
   const dotRefs = useRef<{ [key: string]: View | null }>({});
-  
-  // Ref và state để lấy tọa độ của cái khung vẽ (gameArea)
   const gameAreaRef = useRef<View>(null);
-  const [gameAreaOffset, setGameAreaOffset] = useState({ px: 0, py: 0 });
   
-  // Đường đang vẽ dở dang
-  const [currentPath, setCurrentPath] = useState<{ points: {x: number, y: number}[], color: string, startKey: string } | null>(null);
+  // Bùa chống "mất trí nhớ": Dùng Ref cho state vẽ vời để PanResponder không bị kẹt closure
+  const currentPathRef = useRef<{ points: {x: number, y: number}[], color: string, startKey: string } | null>(null);
+  const completedPathsRef = useRef<any[]>([]);
   
-  // Những đường đã nối thành công
-  const [completedPaths, setCompletedPaths] = useState<any[]>([]);
+  // State để render giao diện
+  const [currentPathState, setCurrentPathState] = useState<{ points: {x: number, y: number}[], color: string, startKey: string } | null>(null);
+  const [completedPathsState, setCompletedPathsState] = useState<any[]>([]);
   const [score, setScore] = useState<number | null>(null);
 
   useFocusEffect(
@@ -51,122 +43,134 @@ export default function BaiTapScreen() {
       return;
     }
     
-    // Bốc ngẫu nhiên 5 món
     let shuffled = [...TAP_DOC_DATA].sort(() => 0.5 - Math.random());
     let selected = shuffled.slice(0, 5);
 
-    // Bày ra mâm trái (ảnh) và mâm phải (chữ) rồi xáo trộn thứ tự
     setLeftItems([...selected].sort(() => 0.5 - Math.random()));
     setRightItems([...selected].sort(() => 0.5 - Math.random()));
     
-    setCompletedPaths([]);
-    setCurrentPath(null);
+    // Reset lại toàn bộ trí nhớ của Ref và State
+    completedPathsRef.current = [];
+    currentPathRef.current = null;
+    setCompletedPathsState([]);
+    setCurrentPathState(null);
     setScore(null);
     dotLayouts.current = {};
     
-    // Ép đo lại tọa độ sau khi xáo mâm
     setTimeout(() => {
       measureAllDots();
     }, 300);
   };
 
   const measureAllDots = () => {
+    if (!gameAreaRef.current) return;
     Object.keys(dotRefs.current).forEach(key => {
-      dotRefs.current[key]?.measure((x, y, w, h, px, py) => {
-        if (dotLayouts.current[key] && px && py) {
-          dotLayouts.current[key].x = px + w / 2;
-          dotLayouts.current[key].y = py + h / 2;
-        }
-      });
+      const node = dotRefs.current[key];
+      if (node) {
+        // Đo tọa độ các dấu chấm dựa trên hệ quy chiếu chung là gameArea
+        node.measureLayout(
+          gameAreaRef.current as any,
+          (left, top, width, height) => {
+            if (dotLayouts.current[key]) {
+              dotLayouts.current[key].x = left + width / 2;
+              dotLayouts.current[key].y = top + height / 2;
+            }
+          },
+          () => {
+            console.log('Đo tọa độ xịt cho', key);
+          }
+        );
+      }
     });
   };
 
-  // Cỗ máy bắt chuyển động ngón tay / chuột của Tèo (Đã gắn bùa trị trình duyệt Web)
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true, // Bắt buộc chặn trên web
+      onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponderCapture: () => true,  // Bắt buộc chặn trên web
+      onMoveShouldSetPanResponderCapture: () => true,
       
-      // Khi bé vừa đặt ngón tay/chuột xuống
       onPanResponderGrant: (evt) => {
-        const { pageX, pageY } = evt.nativeEvent;
-        // Dò xem bé có đang bấm trúng cái dấu chấm nào không
+        // Sử dụng tọa độ Local (chuẩn xác hoàn toàn với gameArea)
+        const { locationX, locationY } = evt.nativeEvent;
         for (const key in dotLayouts.current) {
           const dot = dotLayouts.current[key];
-          const dist = Math.sqrt(Math.pow(pageX - dot.x, 2) + Math.pow(pageY - dot.y, 2));
-          if (dist < 50) { // Tăng nhẹ diện tích bắt chạm lên xíu cho dễ bấm
-            // Đã chọn trúng, bắt đầu vẽ từ TÂM của dấu chấm (trừ đi offset của gameArea để SVG hiểu)
-            setCurrentPath({
-              points: [{ x: dot.x - gameAreaOffset.px, y: dot.y - gameAreaOffset.py }],
-              color: LINE_COLORS[completedPaths.length % LINE_COLORS.length],
+          const dist = Math.sqrt(Math.pow(locationX - dot.x, 2) + Math.pow(locationY - dot.y, 2));
+          if (dist < 50) { 
+            const color = LINE_COLORS[completedPathsRef.current.length % LINE_COLORS.length];
+            const newPath = {
+              points: [{ x: dot.x, y: dot.y }],
+              color,
               startKey: key,
-            });
+            };
+            currentPathRef.current = newPath;
+            setCurrentPathState(newPath);
             break;
           }
         }
       },
       
-      // Khi bé kéo lê tạo đường cong uốn lượn
       onPanResponderMove: (evt) => {
-        const { pageX, pageY } = evt.nativeEvent;
-        setCurrentPath((prev) => {
-          if (!prev) return null;
-          return { ...prev, points: [...prev.points, { x: pageX - gameAreaOffset.px, y: pageY - gameAreaOffset.py }] };
-        });
+        if (currentPathRef.current) {
+          const { locationX, locationY } = evt.nativeEvent;
+          currentPathRef.current = {
+            ...currentPathRef.current,
+            points: [...currentPathRef.current.points, { x: locationX, y: locationY }]
+          };
+          setCurrentPathState(currentPathRef.current);
+        }
       },
       
-      // Khi bé nhấc tay/thả chuột ra
       onPanResponderRelease: (evt) => {
-        const { pageX, pageY } = evt.nativeEvent;
-        setCurrentPath((prevPath) => {
-          if (!prevPath) return null;
+        if (currentPathRef.current) {
+          const { locationX, locationY } = evt.nativeEvent;
+          const prevPath = currentPathRef.current;
+          
+          // Nhấc tay là dọn luôn cọ vẽ
+          currentPathRef.current = null;
+          setCurrentPathState(null);
           
           let hitKey = null;
-          // Dò xem nhả tay có trúng dấu chấm đích không
           for (const key in dotLayouts.current) {
             const dot = dotLayouts.current[key];
-            const dist = Math.sqrt(Math.pow(pageX - dot.x, 2) + Math.pow(pageY - dot.y, 2));
+            const dist = Math.sqrt(Math.pow(locationX - dot.x, 2) + Math.pow(locationY - dot.y, 2));
             const startDot = dotLayouts.current[prevPath.startKey];
             
-            // Phải trúng chấm, và phải nối từ trái sang phải hoặc ngược lại (không cho nối ảnh với ảnh)
-            if (dist < 60 && dot.type !== startDot.type) {
+            if (dist < 60 && startDot && dot.type !== startDot.type) {
               hitKey = key;
               break;
             }
           }
 
           if (hitKey) {
-            // Nối thành công, HÚT dính nét cuối vào tâm dấu chấm đích
             const hitDot = dotLayouts.current[hitKey];
-            const snappedPoints = [...prevPath.points, { x: hitDot.x - gameAreaOffset.px, y: hitDot.y - gameAreaOffset.py }];
+            const snappedPoints = [...prevPath.points, { x: hitDot.x, y: hitDot.y }];
             
-            const newCompleted = [...completedPaths, { ...prevPath, points: snappedPoints, endKey: hitKey }];
-            setCompletedPaths(newCompleted);
+            const newCompleted = [...completedPathsRef.current, { ...prevPath, points: snappedPoints, endKey: hitKey }];
             
-            // Nếu đủ 5 sợi dây thì chấm điểm
+            // Lưu vào Ref để chống mất trí nhớ, rồi mới bơm vào State để render SVG
+            completedPathsRef.current = newCompleted;
+            setCompletedPathsState(newCompleted);
+            
             if (newCompleted.length === 5) {
               let dung = 0;
               newCompleted.forEach(p => {
                 const s = dotLayouts.current[p.startKey];
                 const e = dotLayouts.current[p.endKey];
-                if (s.word === e.word) dung += 2; // Đúng 1 câu được 2 điểm
+                if (s && e && s.word === e.word) dung += 2; 
               });
               setScore(dung);
             }
           }
-          return null; // Dọn đường nháp để vẽ sợi khác
-        });
+        }
       }
     })
   ).current;
 
-  // Hàm chuyển mảng tọa độ thành chuỗi để SVG vẽ nét cong mượt mà
   const buildSvgPath = (points: {x: number, y: number}[]) => {
     if (points.length === 0) return '';
-    const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-    return d;
+    return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   };
 
   if (!fontsLoaded) return null;
@@ -177,38 +181,27 @@ export default function BaiTapScreen() {
         <Text style={styles.title}>Nối Từ Cùng Bé ✏️</Text>
       </View>
 
-      {/* KHÓA MÕM TRÌNH DUYỆT: Không cho bôi đen, không cho cuộn trang khi vẽ */}
       <View 
         ref={gameAreaRef}
         onLayout={() => {
-          gameAreaRef.current?.measure((x, y, w, h, px, py) => {
-            setGameAreaOffset({ px, py });
-            // Cập nhật lại tọa độ dấu chấm khi khung vẽ đã load xong
-            setTimeout(() => measureAllDots(), 300);
-          });
+          setTimeout(measureAllDots, 100);
         }}
-        style={[
-          styles.gameArea,
-          Platform.OS === 'web' ? { touchAction: 'none', userSelect: 'none' } as any : {}
-        ]} 
-        {...panResponder.panHandlers}
+        style={styles.gameArea} 
       >
         
-        {/* Lớp Kính Vẽ SVG đè lên trên cùng để sợi chỉ luôn hiện rõ */}
+        {/* Lớp Kính Vẽ SVG (nằm dưới lớp bắt chạm) */}
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <Svg height="100%" width="100%">
-            {/* Vẽ những đường cong bé đã nối xong */}
-            {completedPaths.map((p, index) => (
+            {completedPathsState.map((p, index) => (
               <Path key={index} d={buildSvgPath(p.points)} stroke={p.color} strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
             ))}
-            {/* Vẽ đường bé đang kéo dở dang */}
-            {currentPath && (
-              <Path d={buildSvgPath(currentPath.points)} stroke={currentPath.color} strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            {currentPathState && (
+              <Path d={buildSvgPath(currentPathState.points)} stroke={currentPathState.color} strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
             )}
           </Svg>
         </View>
 
-        {/* CỘT TRÁI: DANH SÁCH ẢNH */}
+        {/* CỘT TRÁI (Khóa chạm để không bị nhiễu tọa độ) */}
         <View style={styles.column} pointerEvents="none">
           {leftItems.map((item, index) => {
             const dotKey = `left_${index}`;
@@ -220,14 +213,14 @@ export default function BaiTapScreen() {
                 <View 
                   ref={(r) => { dotRefs.current[dotKey] = r; }}
                   style={styles.dot} 
-                  onLayout={() => measureAllDots()} 
+                  onLayout={measureAllDots} 
                 />
               </View>
             );
           })}
         </View>
 
-        {/* CỘT PHẢI: DANH SÁCH CHỮ (FONT HP001) */}
+        {/* CỘT PHẢI (Khóa chạm để không bị nhiễu tọa độ) */}
         <View style={styles.column} pointerEvents="none">
           {rightItems.map((item, index) => {
             const dotKey = `right_${index}`;
@@ -238,7 +231,7 @@ export default function BaiTapScreen() {
                 <View 
                   ref={(r) => { dotRefs.current[dotKey] = r; }}
                   style={[styles.dot, { marginRight: 20 }]} 
-                  onLayout={() => measureAllDots()}
+                  onLayout={measureAllDots}
                 />
                 <View style={styles.wordBox}>
                   <Text style={styles.wordText}>{item.word}</Text>
@@ -248,9 +241,18 @@ export default function BaiTapScreen() {
           })}
         </View>
 
+        {/* LỚP BẮT CHẠM TÀNG HÌNH ĐÈ LÊN TRÊN CÙNG */}
+        {/* Lớp này che phủ toàn bộ gameArea, bắt tọa độ nội bộ locationX/Y cực chuẩn trên cả Web và App */}
+        <View 
+            style={[
+              StyleSheet.absoluteFill, 
+              { zIndex: 99 },
+              Platform.OS === 'web' ? { touchAction: 'none', userSelect: 'none' } as any : {}
+            ]} 
+            {...panResponder.panHandlers}
+        />
       </View>
 
-      {/* BẢNG CHẤM ĐIỂM KHI NỐI XONG 5 CÂU */}
       {score !== null && (
         <View style={styles.resultModal}>
           <Text style={styles.resultText}>Điểm của bé: {score}/10 {score === 10 ? '🎉' : '👏'}</Text>
@@ -304,7 +306,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   wordText: {
-    fontSize: 50, // Tèo cho bự bự một chút để bé dễ đọc nét thanh nét đậm
+    fontSize: 50, 
     fontFamily: 'HP001', 
     color: '#1F2937',
     textTransform: 'lowercase',
