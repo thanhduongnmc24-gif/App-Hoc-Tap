@@ -2,11 +2,11 @@
 // Đại ca quăng video vào tram_nhap_hang/videos/... rồi chạy Tool nha!
 
 export const GIOI_VIDEOS = [
-  require('../assets/videos/gioi/export (1).MP4'),
-  require('../assets/videos/gioi/export (1).mov'),
-  require('../assets/videos/gioi/export.MP4'),
-  require('../assets/videos/gioi/export.mov'),
-  require('../assets/videos/gioi/export_1772505960810.MP4'),
+  require('../assets/videos/gioi/export (1).mp4'),
+  require('../assets/videos/gioi/export (1)2.mp4'),
+  require('../assets/videos/gioi/export.mp4'),
+  require('../assets/videos/gioi/export3.mp4'),
+  require('../assets/videos/gioi/export_1772505960810.mp4'),
   require('../assets/videos/gioi/gioi_1.mp4'),
   require('../assets/videos/gioi/gioi_2.mp4'),
   require('../assets/videos/gioi/gioi_3.mp4'),

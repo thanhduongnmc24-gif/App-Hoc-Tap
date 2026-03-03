@@ -9,24 +9,24 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#F59E0B', // Màu cam rực rỡ cho tab đang chọn
-        tabBarInactiveTintColor: 'gray',  // Màu xám cho tab chưa chọn
+        tabBarActiveTintColor: '#F59E0B', 
+        tabBarInactiveTintColor: 'gray',  
         tabBarStyle: { 
           backgroundColor: colors.card,
           borderTopWidth: 2,
           borderTopColor: colors.border,
-          height: 65, // Cho thanh tab bự ra xíu cho bé dễ bấm
+          height: 65, 
           paddingBottom: 10,
           paddingTop: 5,
         },
-        headerShown: false, // Giấu cái header mặc định đi cho thoáng app
+        headerShown: false, 
       }}>
       
       {/* 1. TAB TOÁN HỌC */}
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Toán Học',
+          title: 'Toán',
           tabBarIcon: ({ color }) => <Ionicons name="calculator" size={28} color={color} />,
         }}
       />
@@ -40,7 +40,7 @@ export default function TabLayout() {
         }}
       />
 
-      {/* 3. TAB TẬP ĐỌC (NẰM NGAY CẠNH TIẾNG VIỆT RỒI NÈ ĐẠI CA) */}
+      {/* 3. TAB TẬP ĐỌC */}
       <Tabs.Screen
         name="tapdoc"
         options={{
@@ -49,7 +49,16 @@ export default function TabLayout() {
         }}
       />
 
-      {/* 4. TAB CÀI ĐẶT */}
+      {/* 4. TAB BÀI TẬP (MỚI THÊM NÈ ĐẠI CA) */}
+      <Tabs.Screen
+        name="baitap"
+        options={{
+          title: 'Bài Tập',
+          tabBarIcon: ({ color }) => <Ionicons name="pencil" size={28} color={color} />,
+        }}
+      />
+
+      {/* 5. TAB CÀI ĐẶT */}
       <Tabs.Screen
         name="settings"
         options={{

@@ -25,7 +25,7 @@ const getFiles = (dirPath, extensions) => {
 const imageExts = ['.png', '.jpg', '.jpeg'];
 const videoExts = ['.mp4', '.mov', '.avi'];
 
-console.log('🚀 TÈO ĐANG KHỞI ĐỘNG CỖ MÁY DỌN KHO THÔNG MINH...');
+console.log('🚀 TÈO ĐANG KHỞI ĐỘNG CỖ MÁY DỌN KHO "ALL-IN-ONE"...');
 
 // =========================================================================
 // PHẦN 1: BẢN ĐỒ VẬN CHUYỂN TỪ TRẠM TẠM SANG KHO CHÍNH
@@ -75,15 +75,19 @@ mappings.forEach(map => {
       
       // Chỉ bốc file, bỏ qua thư mục con (nếu lỡ có)
       if (fs.statSync(sourcePath).isFile()) {
-        let finalName = file;
+        const ext = path.extname(file).toLowerCase();
+        const baseName = path.basename(file, ext);
+        
+        // BÙA THAY ÁO: Nếu là video thì nhắm mắt ép luôn thành đuôi .mp4
+        const finalExt = videoExts.includes(ext) ? '.mp4' : ext;
+        
+        let finalName = baseName + finalExt;
         let destPath = path.join(map.dest, finalName);
         
-        // KIỂM TRA TRÙNG TÊN: Nếu kho chính đã có file này rồi thì mới đổi tên
+        // KIỂM TRA TRÙNG TÊN: Nếu kho chính đã có file này rồi thì mới gắn đuôi số
         if (fs.existsSync(destPath)) {
-          const ext = path.extname(file);
-          const baseName = path.basename(file, ext);
-          const timestamp = Date.now(); // Lấy mã thời gian làm đuôi
-          finalName = `${baseName}_${timestamp}${ext}`; // Ví dụ: a_1709456.mp4
+          const timestamp = Date.now(); 
+          finalName = `${baseName}_${timestamp}${finalExt}`; 
           destPath = path.join(map.dest, finalName);
         }
         
@@ -95,7 +99,7 @@ mappings.forEach(map => {
 
     if (count > 0) {
       // Báo cáo lộ trình gọn gàng cho đại ca dễ theo dõi
-      const tenTram = map.src.split('tram_nhap_hang')[1].substring(1); 
+      const tenTram = map.src.replace(tramDir, '').substring(1).replace(/\\/g, '/'); 
       console.log(`🚚 Đã chuyển & xử lý ${count} món từ trạm [${tenTram}]`);
     }
   }
@@ -154,12 +158,19 @@ const videoCanCoGanDir = path.join(assetsDir, 'videos', 'can_co_gan');
 
 const makeKhoVideoContent = () => {
   let content = `// File này Tèo code tự động.\n// Đại ca quăng video vào tram_nhap_hang/videos/... rồi chạy Tool nha!\n\n`;
-  const gioiFiles = getFiles(videoGioiDir, videoExts);
+  
+  // Lưu ý: Tèo chỉ quét các file đuôi .mp4 vì nãy Tèo đã ép đổi đuôi ở trên rồi nha đại ca!
+  const mp4Exts = ['.mp4']; 
+  
+  const gioiFiles = getFiles(videoGioiDir, mp4Exts);
   content += `export const GIOI_VIDEOS = [\n${gioiFiles.map(f => `  require('../assets/videos/gioi/${f}'),`).join('\n')}\n];\n\n`;
-  const totFiles = getFiles(videoTotDir, videoExts);
+  
+  const totFiles = getFiles(videoTotDir, mp4Exts);
   content += `export const TOT_VIDEOS = [\n${totFiles.map(f => `  require('../assets/videos/tot/${f}'),`).join('\n')}\n];\n\n`;
-  const canCoGanFiles = getFiles(videoCanCoGanDir, videoExts);
+  
+  const canCoGanFiles = getFiles(videoCanCoGanDir, mp4Exts);
   content += `export const CAN_CO_GAN_VIDEOS = [\n${canCoGanFiles.map(f => `  require('../assets/videos/can_co_gan/${f}'),`).join('\n')}\n];\n\n`;
+  
   content += `export const ALL_VIDEOS = [...GIOI_VIDEOS, ...TOT_VIDEOS, ...CAN_CO_GAN_VIDEOS];\n`;
   return content;
 };
