@@ -1,4 +1,5 @@
-// File này Tèo code tự động. Đại ca quăng ảnh vào rồi chạy Tool nha!
+// File này Tèo code tự động.
+// Đại ca quăng ảnh vào tram_nhap_hang/anh_tap_doc rồi chạy Tool nha!
 
 export const TAP_DOC_DATA = [
   { word: 'bàn chải', image: require('../assets/images/anh_tap_doc/bàn chải.png') },

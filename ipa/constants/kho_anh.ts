@@ -1,4 +1,5 @@
-// File này Tèo code tự động. Đại ca phân loại ảnh vào đúng thư mục rồi chạy Tool nha!
+// File này Tèo code tự động.
+// Đại ca quăng ảnh vào tram_nhap_hang/anh_tinh_diem/... rồi chạy Tool nha!
 
 export const GIOI_IMAGES = [
   require('../assets/images/anh_tinh_diem/gioi/1.png'),
