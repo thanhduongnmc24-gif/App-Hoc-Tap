@@ -1,10 +1,9 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, Dimensions, PanResponder, TouchableOpacity, Alert, Platform } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useFocusEffect } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { useFonts } from 'expo-font';
-import { Ionicons } from '@expo/vector-icons';
 
 // Import kho tập đọc đại ca xài tool nạp vào
 import { TAP_DOC_DATA } from '../../constants/kho_tap_doc';
@@ -27,6 +26,11 @@ export default function BaiTapScreen() {
   
   // Lưu tọa độ của các dấu chấm để dò xem bé có kéo trúng không
   const dotLayouts = useRef<{ [key: string]: { x: number, y: number, word: string, type: 'left' | 'right' } }>({});
+  const dotRefs = useRef<{ [key: string]: View | null }>({});
+  
+  // Ref và state để lấy tọa độ của cái khung vẽ (gameArea)
+  const gameAreaRef = useRef<View>(null);
+  const [gameAreaOffset, setGameAreaOffset] = useState({ px: 0, py: 0 });
   
   // Đường đang vẽ dở dang
   const [currentPath, setCurrentPath] = useState<{ points: {x: number, y: number}[], color: string, startKey: string } | null>(null);
@@ -59,6 +63,22 @@ export default function BaiTapScreen() {
     setCurrentPath(null);
     setScore(null);
     dotLayouts.current = {};
+    
+    // Ép đo lại tọa độ sau khi xáo mâm
+    setTimeout(() => {
+      measureAllDots();
+    }, 300);
+  };
+
+  const measureAllDots = () => {
+    Object.keys(dotRefs.current).forEach(key => {
+      dotRefs.current[key]?.measure((x, y, w, h, px, py) => {
+        if (dotLayouts.current[key] && px && py) {
+          dotLayouts.current[key].x = px + w / 2;
+          dotLayouts.current[key].y = py + h / 2;
+        }
+      });
+    });
   };
 
   // Cỗ máy bắt chuyển động ngón tay / chuột của Tèo (Đã gắn bùa trị trình duyệt Web)
@@ -72,14 +92,14 @@ export default function BaiTapScreen() {
       // Khi bé vừa đặt ngón tay/chuột xuống
       onPanResponderGrant: (evt) => {
         const { pageX, pageY } = evt.nativeEvent;
-        // Dò xem bé có đang bấm trúng cái dấu chấm nào không (bán kính 40px cho dễ bấm)
+        // Dò xem bé có đang bấm trúng cái dấu chấm nào không
         for (const key in dotLayouts.current) {
           const dot = dotLayouts.current[key];
           const dist = Math.sqrt(Math.pow(pageX - dot.x, 2) + Math.pow(pageY - dot.y, 2));
-          if (dist < 40) {
-            // Đã chọn trúng, gán màu cho sợi dây
+          if (dist < 50) { // Tăng nhẹ diện tích bắt chạm lên xíu cho dễ bấm
+            // Đã chọn trúng, bắt đầu vẽ từ TÂM của dấu chấm (trừ đi offset của gameArea để SVG hiểu)
             setCurrentPath({
-              points: [{ x: pageX, y: pageY }],
+              points: [{ x: dot.x - gameAreaOffset.px, y: dot.y - gameAreaOffset.py }],
               color: LINE_COLORS[completedPaths.length % LINE_COLORS.length],
               startKey: key,
             });
@@ -93,12 +113,12 @@ export default function BaiTapScreen() {
         const { pageX, pageY } = evt.nativeEvent;
         setCurrentPath((prev) => {
           if (!prev) return null;
-          return { ...prev, points: [...prev.points, { x: pageX, y: pageY }] };
+          return { ...prev, points: [...prev.points, { x: pageX - gameAreaOffset.px, y: pageY - gameAreaOffset.py }] };
         });
       },
       
       // Khi bé nhấc tay/thả chuột ra
-      onPanResponderRelease: (evt, gestureState) => {
+      onPanResponderRelease: (evt) => {
         const { pageX, pageY } = evt.nativeEvent;
         setCurrentPath((prevPath) => {
           if (!prevPath) return null;
@@ -111,15 +131,18 @@ export default function BaiTapScreen() {
             const startDot = dotLayouts.current[prevPath.startKey];
             
             // Phải trúng chấm, và phải nối từ trái sang phải hoặc ngược lại (không cho nối ảnh với ảnh)
-            if (dist < 50 && dot.type !== startDot.type) {
+            if (dist < 60 && dot.type !== startDot.type) {
               hitKey = key;
               break;
             }
           }
 
           if (hitKey) {
-            // Nối thành công, chốt vào danh sách
-            const newCompleted = [...completedPaths, { ...prevPath, endKey: hitKey }];
+            // Nối thành công, HÚT dính nét cuối vào tâm dấu chấm đích
+            const hitDot = dotLayouts.current[hitKey];
+            const snappedPoints = [...prevPath.points, { x: hitDot.x - gameAreaOffset.px, y: hitDot.y - gameAreaOffset.py }];
+            
+            const newCompleted = [...completedPaths, { ...prevPath, points: snappedPoints, endKey: hitKey }];
             setCompletedPaths(newCompleted);
             
             // Nếu đủ 5 sợi dây thì chấm điểm
@@ -156,6 +179,14 @@ export default function BaiTapScreen() {
 
       {/* KHÓA MÕM TRÌNH DUYỆT: Không cho bôi đen, không cho cuộn trang khi vẽ */}
       <View 
+        ref={gameAreaRef}
+        onLayout={() => {
+          gameAreaRef.current?.measure((x, y, w, h, px, py) => {
+            setGameAreaOffset({ px, py });
+            // Cập nhật lại tọa độ dấu chấm khi khung vẽ đã load xong
+            setTimeout(() => measureAllDots(), 300);
+          });
+        }}
         style={[
           styles.gameArea,
           Platform.OS === 'web' ? { touchAction: 'none', userSelect: 'none' } as any : {}
@@ -164,7 +195,7 @@ export default function BaiTapScreen() {
       >
         
         {/* Lớp Kính Vẽ SVG đè lên trên cùng để sợi chỉ luôn hiện rõ */}
-        <View style={StyleSheet.absoluteFill}>
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <Svg height="100%" width="100%">
             {/* Vẽ những đường cong bé đã nối xong */}
             {completedPaths.map((p, index) => (
@@ -178,23 +209,18 @@ export default function BaiTapScreen() {
         </View>
 
         {/* CỘT TRÁI: DANH SÁCH ẢNH */}
-        <View style={styles.column}>
+        <View style={styles.column} pointerEvents="none">
           {leftItems.map((item, index) => {
             const dotKey = `left_${index}`;
+            if (!dotLayouts.current[dotKey]) dotLayouts.current[dotKey] = { x: 0, y: 0, word: item.word, type: 'left' };
+            
             return (
               <View key={dotKey} style={styles.itemRow}>
                 <Image source={item.image} style={styles.image} resizeMode="cover" />
-                {/* Lấy tọa độ thực tế của cái chấm trên màn hình */}
                 <View 
+                  ref={(r) => { dotRefs.current[dotKey] = r; }}
                   style={styles.dot} 
-                  onLayout={(e) => {
-                    dotLayouts.current[dotKey] = { x: e.nativeEvent.layout.x, y: e.nativeEvent.layout.y, word: item.word, type: 'left' };
-                  }} 
-                  ref={(ref) => {
-                    ref?.measure((x, y, w, h, px, py) => {
-                      dotLayouts.current[dotKey] = { x: px + w/2, y: py + h/2, word: item.word, type: 'left' };
-                    });
-                  }}
+                  onLayout={() => measureAllDots()} 
                 />
               </View>
             );
@@ -202,22 +228,17 @@ export default function BaiTapScreen() {
         </View>
 
         {/* CỘT PHẢI: DANH SÁCH CHỮ (FONT HP001) */}
-        <View style={styles.column}>
+        <View style={styles.column} pointerEvents="none">
           {rightItems.map((item, index) => {
             const dotKey = `right_${index}`;
+            if (!dotLayouts.current[dotKey]) dotLayouts.current[dotKey] = { x: 0, y: 0, word: item.word, type: 'right' };
+            
             return (
               <View key={dotKey} style={[styles.itemRow, { justifyContent: 'flex-start' }]}>
-                {/* Lấy tọa độ dấu chấm */}
                 <View 
+                  ref={(r) => { dotRefs.current[dotKey] = r; }}
                   style={[styles.dot, { marginRight: 20 }]} 
-                  onLayout={(e) => {
-                    dotLayouts.current[dotKey] = { x: e.nativeEvent.layout.x, y: e.nativeEvent.layout.y, word: item.word, type: 'right' };
-                  }}
-                  ref={(ref) => {
-                    ref?.measure((x, y, w, h, px, py) => {
-                      dotLayouts.current[dotKey] = { x: px + w/2, y: py + h/2, word: item.word, type: 'right' };
-                    });
-                  }}
+                  onLayout={() => measureAllDots()}
                 />
                 <View style={styles.wordBox}>
                   <Text style={styles.wordText}>{item.word}</Text>
@@ -257,6 +278,7 @@ const styles = StyleSheet.create({
   column: {
     width: '45%',
     justifyContent: 'space-around',
+    zIndex: 10,
   },
   itemRow: {
     flexDirection: 'row',
@@ -308,6 +330,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 10,
     shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 10,
+    zIndex: 999,
   },
   resultText: { fontSize: 35, fontWeight: 'bold', color: '#EF4444', marginBottom: 20 },
   replayBtn: { backgroundColor: '#3B82F6', paddingVertical: 15, paddingHorizontal: 30, borderRadius: 15 },
