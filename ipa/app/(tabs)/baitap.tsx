@@ -1,11 +1,17 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, PanResponder, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, Image, PanResponder, TouchableOpacity, Alert, Platform, Modal, Dimensions } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useFocusEffect } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { useFonts } from 'expo-font';
+import { Video, ResizeMode } from 'expo-av'; 
 
+// Import kho tập đọc
 import { TAP_DOC_DATA } from '../../constants/kho_tap_doc';
+// Import kho video để thưởng cho bé
+import { GIOI_VIDEOS, TOT_VIDEOS, CAN_CO_GAN_VIDEOS } from '../../constants/kho_video';
+
+const { width } = Dimensions.get('window');
 
 const LINE_COLORS = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
 
@@ -22,14 +28,19 @@ export default function BaiTapScreen() {
   const dotRefs = useRef<{ [key: string]: View | null }>({});
   const gameAreaRef = useRef<View>(null);
   
-  // Bùa chống "mất trí nhớ": Dùng Ref cho state vẽ vời để PanResponder không bị kẹt closure
   const currentPathRef = useRef<{ points: {x: number, y: number}[], color: string, startKey: string } | null>(null);
   const completedPathsRef = useRef<any[]>([]);
   
-  // State để render giao diện
   const [currentPathState, setCurrentPathState] = useState<{ points: {x: number, y: number}[], color: string, startKey: string } | null>(null);
   const [completedPathsState, setCompletedPathsState] = useState<any[]>([]);
   const [score, setScore] = useState<number | null>(null);
+
+  // State và Ref cho Rạp chiếu phim mini
+  const [randomVideo, setRandomVideo] = useState<any>(null); 
+  const [showVideoPopup, setShowVideoPopup] = useState(false);
+  const unseenGioi = useRef([...GIOI_VIDEOS]);
+  const unseenTot = useRef([...TOT_VIDEOS]);
+  const unseenCanCoGan = useRef([...CAN_CO_GAN_VIDEOS]);
 
   useFocusEffect(
     useCallback(() => {
@@ -49,13 +60,16 @@ export default function BaiTapScreen() {
     setLeftItems([...selected].sort(() => 0.5 - Math.random()));
     setRightItems([...selected].sort(() => 0.5 - Math.random()));
     
-    // Reset lại toàn bộ trí nhớ của Ref và State
     completedPathsRef.current = [];
     currentPathRef.current = null;
     setCompletedPathsState([]);
     setCurrentPathState(null);
     setScore(null);
     dotLayouts.current = {};
+    
+    // Tắt video nếu đang bật
+    setShowVideoPopup(false);
+    setRandomVideo(null);
     
     setTimeout(() => {
       measureAllDots();
@@ -67,7 +81,6 @@ export default function BaiTapScreen() {
     Object.keys(dotRefs.current).forEach(key => {
       const node = dotRefs.current[key];
       if (node) {
-        // Đo tọa độ các dấu chấm dựa trên hệ quy chiếu chung là gameArea
         node.measureLayout(
           gameAreaRef.current as any,
           (left, top, width, height) => {
@@ -92,7 +105,6 @@ export default function BaiTapScreen() {
       onMoveShouldSetPanResponderCapture: () => true,
       
       onPanResponderGrant: (evt) => {
-        // Sử dụng tọa độ Local (chuẩn xác hoàn toàn với gameArea)
         const { locationX, locationY } = evt.nativeEvent;
         for (const key in dotLayouts.current) {
           const dot = dotLayouts.current[key];
@@ -127,7 +139,6 @@ export default function BaiTapScreen() {
           const { locationX, locationY } = evt.nativeEvent;
           const prevPath = currentPathRef.current;
           
-          // Nhấc tay là dọn luôn cọ vẽ
           currentPathRef.current = null;
           setCurrentPathState(null);
           
@@ -149,7 +160,6 @@ export default function BaiTapScreen() {
             
             const newCompleted = [...completedPathsRef.current, { ...prevPath, points: snappedPoints, endKey: hitKey }];
             
-            // Lưu vào Ref để chống mất trí nhớ, rồi mới bơm vào State để render SVG
             completedPathsRef.current = newCompleted;
             setCompletedPathsState(newCompleted);
             
@@ -161,6 +171,42 @@ export default function BaiTapScreen() {
                 if (s && e && s.word === e.word) dung += 2; 
               });
               setScore(dung);
+
+              // ========================================================
+              // BỐC THĂM VIDEO CHÚC MỪNG KHÔNG TRÙNG LẶP
+              // ========================================================
+              let originalVideoArray;
+              let unseenRef: React.MutableRefObject<any[]>;
+
+              if (dung >= 9) {
+                originalVideoArray = GIOI_VIDEOS;
+                unseenRef = unseenGioi;
+              } else if (dung >= 6) {
+                originalVideoArray = TOT_VIDEOS;
+                unseenRef = unseenTot;
+              } else {
+                originalVideoArray = CAN_CO_GAN_VIDEOS;
+                unseenRef = unseenCanCoGan;
+              }
+
+              if (originalVideoArray && originalVideoArray.length > 0) {
+                  if (unseenRef.current.length === 0) {
+                      unseenRef.current = [...originalVideoArray];
+                  }
+                  const randomIndex = Math.floor(Math.random() * unseenRef.current.length);
+                  const randVid = unseenRef.current[randomIndex];
+                  unseenRef.current.splice(randomIndex, 1);
+                  setRandomVideo(randVid);
+              } else {
+                  setRandomVideo(null); 
+              }
+              
+              // Hẹn giờ 1 giây sau bung lụa
+              setTimeout(() => {
+                if (originalVideoArray && originalVideoArray.length > 0) {
+                  setShowVideoPopup(true);
+                }
+              }, 1000); 
             }
           }
         }
@@ -188,8 +234,6 @@ export default function BaiTapScreen() {
         }}
         style={styles.gameArea} 
       >
-        
-        {/* Lớp Kính Vẽ SVG (nằm dưới lớp bắt chạm) */}
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <Svg height="100%" width="100%">
             {completedPathsState.map((p, index) => (
@@ -201,7 +245,6 @@ export default function BaiTapScreen() {
           </Svg>
         </View>
 
-        {/* CỘT TRÁI (Khóa chạm để không bị nhiễu tọa độ) */}
         <View style={styles.column} pointerEvents="none">
           {leftItems.map((item, index) => {
             const dotKey = `left_${index}`;
@@ -210,17 +253,12 @@ export default function BaiTapScreen() {
             return (
               <View key={dotKey} style={styles.itemRow}>
                 <Image source={item.image} style={styles.image} resizeMode="cover" />
-                <View 
-                  ref={(r) => { dotRefs.current[dotKey] = r; }}
-                  style={styles.dot} 
-                  onLayout={measureAllDots} 
-                />
+                <View ref={(r) => { dotRefs.current[dotKey] = r; }} style={styles.dot} onLayout={measureAllDots} />
               </View>
             );
           })}
         </View>
 
-        {/* CỘT PHẢI (Khóa chạm để không bị nhiễu tọa độ) */}
         <View style={styles.column} pointerEvents="none">
           {rightItems.map((item, index) => {
             const dotKey = `right_${index}`;
@@ -228,11 +266,7 @@ export default function BaiTapScreen() {
             
             return (
               <View key={dotKey} style={[styles.itemRow, { justifyContent: 'flex-start' }]}>
-                <View 
-                  ref={(r) => { dotRefs.current[dotKey] = r; }}
-                  style={[styles.dot, { marginRight: 20 }]} 
-                  onLayout={measureAllDots}
-                />
+                <View ref={(r) => { dotRefs.current[dotKey] = r; }} style={[styles.dot, { marginRight: 20 }]} onLayout={measureAllDots} />
                 <View style={styles.wordBox}>
                   <Text style={styles.wordText}>{item.word}</Text>
                 </View>
@@ -241,8 +275,6 @@ export default function BaiTapScreen() {
           })}
         </View>
 
-        {/* LỚP BẮT CHẠM TÀNG HÌNH ĐÈ LÊN TRÊN CÙNG */}
-        {/* Lớp này che phủ toàn bộ gameArea, bắt tọa độ nội bộ locationX/Y cực chuẩn trên cả Web và App */}
         <View 
             style={[
               StyleSheet.absoluteFill, 
@@ -261,6 +293,31 @@ export default function BaiTapScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* ========================================================================= */}
+      {/* POPUP VIDEO CHÚC MỪNG */}
+      {/* ========================================================================= */}
+      <Modal visible={showVideoPopup && randomVideo !== null} transparent={true} animationType="fade">
+        <View style={styles.videoOverlay}>
+          <View style={styles.videoWrapper}>
+            <Video
+              source={randomVideo} 
+              style={styles.smallVideo}
+              resizeMode={ResizeMode.CONTAIN} 
+              shouldPlay
+              onPlaybackStatusUpdate={(status) => {
+                if (status.isLoaded && status.didJustFinish) {
+                  setShowVideoPopup(false);
+                }
+              }}
+            />
+            <TouchableOpacity style={styles.skipVideoBtn} onPress={() => setShowVideoPopup(false)}>
+              <Text style={styles.skipVideoText}>X</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -336,5 +393,46 @@ const styles = StyleSheet.create({
   },
   resultText: { fontSize: 35, fontWeight: 'bold', color: '#EF4444', marginBottom: 20 },
   replayBtn: { backgroundColor: '#3B82F6', paddingVertical: 15, paddingHorizontal: 30, borderRadius: 15 },
-  replayBtnText: { color: 'white', fontSize: 20, fontWeight: 'bold' }
+  replayBtnText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
+
+  // STYLES CHO VIDEO POPUP
+  videoOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)', 
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoWrapper: {
+    width: width * 0.5,   
+    height: width * 0.5 * (9/16), 
+    backgroundColor: '#000', 
+    borderRadius: 20,
+    overflow: 'hidden', 
+    elevation: 10, 
+    shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.5, shadowRadius: 10,
+  },
+  smallVideo: {
+    position: 'absolute', 
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  skipVideoBtn: {
+    position: 'absolute',
+    top: 10, 
+    right: 10,
+    backgroundColor: 'rgba(255,255,255,0.3)', 
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10, 
+  },
+  skipVideoText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold'
+  }
 });
