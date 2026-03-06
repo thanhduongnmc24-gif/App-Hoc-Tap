@@ -49,7 +49,7 @@ export default function TabLayout() {
         }}
       />
 
-      {/* 4. TAB BÀI TẬP (MỚI THÊM NÈ ĐẠI CA) */}
+      {/* 4. TAB BÀI TẬP */}
       <Tabs.Screen
         name="baitap"
         options={{
@@ -58,7 +58,16 @@ export default function TabLayout() {
         }}
       />
 
-      {/* 5. TAB CÀI ĐẶT */}
+      {/* 5. TAB LẬT HÌNH (RẠP XIẾC MỚI CỦA TÈO) */}
+      <Tabs.Screen
+        name="lathinh"
+        options={{
+          title: 'Lật Hình',
+          tabBarIcon: ({ color }) => <Ionicons name="cube" size={28} color={color} />,
+        }}
+      />
+
+      {/* 6. TAB CÀI ĐẶT */}
       <Tabs.Screen
         name="settings"
         options={{
