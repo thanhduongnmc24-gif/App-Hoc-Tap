@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, Dimensions, ScrollView, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, ScrollView, Alert, Platform, useWindowDimensions } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -9,14 +9,6 @@ import ConfettiCannon from 'react-native-confetti-cannon';
 
 // Lấy kho ảnh từ Tập Đọc sang làm mồi nhử
 import { TAP_DOC_DATA } from '../../constants/kho_tap_doc';
-
-const { width } = Dimensions.get('window');
-
-// Tính toán kích thước cái thớt (bảng) và 6 miếng thịt (mảnh ghép)
-const BOARD_WIDTH = Platform.OS === 'web' ? Math.min(width * 0.85, 500) : width * 0.85; // Giới hạn độ to trên web cho đẹp
-const BOARD_HEIGHT = BOARD_WIDTH * 1.2; 
-const PIECE_WIDTH = BOARD_WIDTH / 2;
-const PIECE_HEIGHT = BOARD_HEIGHT / 3;
 
 type Piece = {
   id: number;
@@ -31,15 +23,27 @@ type Piece = {
 export default function LatHinhScreen() {
   const { colors } = useTheme();
   
+  const { width } = useWindowDimensions();
+
+  const BOARD_BORDER = 4;
+  const BOARD_WIDTH = Platform.OS === 'web' ? Math.min(width * 0.85, 500) : width * 0.85;
+  // Tèo gọt cái thớt thành hình vuông hoàn hảo luôn để mảnh ghép ra hình vuông 2x2
+  const BOARD_HEIGHT = BOARD_WIDTH; 
+  
+  const INNER_BOARD_WIDTH = BOARD_WIDTH - BOARD_BORDER * 2;
+  const INNER_BOARD_HEIGHT = BOARD_HEIGHT - BOARD_BORDER * 2;
+  
+  // Chia đôi cả rộng và cao để ra 4 ô vuông 2x2
+  const PIECE_WIDTH = INNER_BOARD_WIDTH / 2;
+  const PIECE_HEIGHT = INNER_BOARD_HEIGHT / 2;
+
   const [maxLimit, setMaxLimit] = useState(10);
   const [currentImage, setCurrentImage] = useState<any>(null);
   const [pieces, setPieces] = useState<Piece[]>([]);
   
-  // State quản lý việc làm toán
   const [activePieceId, setActivePieceId] = useState<number | null>(null);
   const [userAnswer, setUserAnswer] = useState('');
   
-  // State quản lý kho báu Sticker
   const [stickers, setStickers] = useState<string[]>([]);
   const [showStickerBook, setShowStickerBook] = useState(false);
   const [isVictory, setIsVictory] = useState(false);
@@ -51,7 +55,6 @@ export default function LatHinhScreen() {
   );
 
   const fetchData = async () => {
-    // 1. Lấy giới hạn toán
     const { data: { user } } = await supabase.auth.getUser();
     let limit = 10;
     if (user) {
@@ -60,7 +63,6 @@ export default function LatHinhScreen() {
     }
     setMaxLimit(limit);
 
-    // 2. Lấy kho sticker trong máy
     try {
       const savedStickers = await AsyncStorage.getItem('sticker_book');
       if (savedStickers) {
@@ -70,7 +72,6 @@ export default function LatHinhScreen() {
       console.log('Lỗi đọc kho sticker', e);
     }
 
-    // 3. Khởi tạo ván mới nếu chưa có
     if (!currentImage) {
       startNewGame(limit);
     }
@@ -86,17 +87,16 @@ export default function LatHinhScreen() {
   const startNewGame = (limit: number = maxLimit) => {
     if (!TAP_DOC_DATA || TAP_DOC_DATA.length === 0) return;
     
-    // Bốc đại 1 tấm ảnh
     const randImg = TAP_DOC_DATA[Math.floor(Math.random() * TAP_DOC_DATA.length)];
     setCurrentImage(randImg);
     setIsVictory(false);
     setUserAnswer('');
     setActivePieceId(null);
 
-    // Chặt ảnh ra 6 khúc (2 cột x 3 hàng) và gài mìn (toán) vào từng khúc
     const newPieces: Piece[] = [];
     let idCounter = 0;
-    for (let row = 0; row < 3; row++) {
+    // Tèo đổi lưới từ 3x2 thành 2x2 (2 hàng, 2 cột = 4 mảnh)
+    for (let row = 0; row < 2; row++) {
       for (let col = 0; col < 2; col++) {
         const { num1, num2 } = generateQuestion(limit);
         newPieces.push({ id: idCounter++, row, col, flipped: false, isError: false, num1, num2 });
@@ -133,16 +133,13 @@ export default function LatHinhScreen() {
     const isCorrect = parseInt(userAnswer, 10) === correctAnswer;
 
     if (isCorrect) {
-      // Đóng bảng, lật miếng ghép lên
       setActivePieceId(null);
       const updatedPieces = pieces.map(p => p.id === activePieceId ? { ...p, flipped: true, isError: false } : p);
       setPieces(updatedPieces);
 
-      // Kiểm tra xem đã lật hết chưa
       const allFlipped = updatedPieces.every(p => p.flipped);
       if (allFlipped) {
         setIsVictory(true);
-        // Cất vào kho báu Sticker
         if (!stickers.includes(currentImage.word)) {
           const newStickers = [...stickers, currentImage.word];
           setStickers(newStickers);
@@ -150,13 +147,11 @@ export default function LatHinhScreen() {
         }
       }
     } else {
-      // Nhập sai thì đóng bảng, phạt góc đó màu đỏ
       setActivePieceId(null);
       setPieces(pieces.map(p => p.id === activePieceId ? { ...p, isError: true } : p));
     }
   };
 
-  // Xác định mảnh ghép đang được bấm để render câu hỏi
   const activePiece = pieces.find(p => p.id === activePieceId);
 
   return (
@@ -173,7 +168,7 @@ export default function LatHinhScreen() {
         {isVictory && <ConfettiCannon count={150} origin={{x: -10, y: 0}} fallSpeed={2500} />}
         
         {currentImage && (
-          <View style={[styles.board, isVictory && styles.boardVictory]}>
+          <View style={[styles.board, isVictory && styles.boardVictory, { width: BOARD_WIDTH, height: BOARD_HEIGHT }]}>
             {pieces.map((piece) => (
               <TouchableOpacity
                 key={piece.id}
@@ -182,19 +177,22 @@ export default function LatHinhScreen() {
                 style={[
                   styles.pieceWrapper,
                   { 
+                    width: PIECE_WIDTH, 
+                    height: PIECE_HEIGHT,
                     backgroundColor: piece.flipped ? 'transparent' : piece.isError ? '#FECACA' : '#E5E7EB',
                     borderColor: piece.isError ? '#EF4444' : 'white',
                   }
                 ]}
               >
-                {/* Dùng transform để di chuyển ảnh, Web hay App đều hiển thị cực chuẩn */}
                 {piece.flipped ? (
                   <Image 
                     source={currentImage.image} 
                     style={{ 
-                      width: BOARD_WIDTH, 
-                      height: BOARD_HEIGHT, 
+                      width: INNER_BOARD_WIDTH, 
+                      height: INNER_BOARD_HEIGHT, 
                       position: 'absolute', 
+                      top: 0,  // <-- ĐÓNG ĐINH GÓC TRÊN
+                      left: 0, // <-- ĐÓNG ĐINH GÓC TRÁI
                       transform: [
                         { translateX: -(piece.col * PIECE_WIDTH) },
                         { translateY: -(piece.row * PIECE_HEIGHT) }
@@ -204,7 +202,7 @@ export default function LatHinhScreen() {
                 ) : (
                   <Ionicons 
                     name={piece.isError ? "alert-circle" : "help-circle"} 
-                    size={50} 
+                    size={60} // Tèo tăng size icon lên tí xíu cho cân đối với ô vuông bự
                     color={piece.isError ? "#EF4444" : "#9CA3AF"} 
                   />
                 )}
@@ -224,7 +222,6 @@ export default function LatHinhScreen() {
         )}
       </View>
 
-      {/* Rút Modal ra ngoài hàm lồng nhau để chống nhấp nháy */}
       {activePieceId !== null && activePiece && (
         <Modal visible={true} transparent animationType="slide">
           <View style={styles.modalOverlay}>
@@ -309,10 +306,23 @@ const styles = StyleSheet.create({
   stickerBtnText: { marginLeft: 5, fontWeight: 'bold', color: '#B45309' },
   
   boardContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  board: { width: BOARD_WIDTH, height: BOARD_HEIGHT, flexDirection: 'row', flexWrap: 'wrap', borderWidth: 4, borderColor: '#4B5563', borderRadius: 10, overflow: 'hidden', backgroundColor: 'white' },
+  board: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    borderWidth: 4, 
+    borderColor: '#4B5563', 
+    borderRadius: 10, 
+    overflow: 'hidden', 
+    backgroundColor: 'white' 
+  },
   boardVictory: { borderColor: '#10B981', shadowColor: '#10B981', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 20, elevation: 10 },
   
-  pieceWrapper: { width: PIECE_WIDTH, height: PIECE_HEIGHT, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 1 },
+  pieceWrapper: { 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    overflow: 'hidden', 
+    borderWidth: 1 
+  },
   
   victoryPanel: { marginTop: 20, alignItems: 'center', backgroundColor: 'white', padding: 20, borderRadius: 20, borderWidth: 3, borderColor: '#FCD34D', elevation: 5 },
   victoryText: { fontSize: 20, color: '#4B5563', fontWeight: 'bold' },

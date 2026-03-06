@@ -109,7 +109,7 @@ export default function BaiTapScreen() {
         for (const key in dotLayouts.current) {
           const dot = dotLayouts.current[key];
           const dist = Math.sqrt(Math.pow(locationX - dot.x, 2) + Math.pow(locationY - dot.y, 2));
-          if (dist < 60) { // Tăng nhẹ diện tích bắt chạm cho phù hợp giao diện bự hơn
+          if (dist < 60) { 
             const color = LINE_COLORS[completedPathsRef.current.length % LINE_COLORS.length];
             const newPath = {
               points: [{ x: dot.x, y: dot.y }],
@@ -148,7 +148,7 @@ export default function BaiTapScreen() {
             const dist = Math.sqrt(Math.pow(locationX - dot.x, 2) + Math.pow(locationY - dot.y, 2));
             const startDot = dotLayouts.current[prevPath.startKey];
             
-            if (dist < 70 && startDot && dot.type !== startDot.type) { // Tăng diện tích hít dính cho dễ nối
+            if (dist < 70 && startDot && dot.type !== startDot.type) { 
               hitKey = key;
               break;
             }
@@ -158,11 +158,20 @@ export default function BaiTapScreen() {
             const hitDot = dotLayouts.current[hitKey];
             const snappedPoints = [...prevPath.points, { x: hitDot.x, y: hitDot.y }];
             
-            const newCompleted = [...completedPathsRef.current, { ...prevPath, points: snappedPoints, endKey: hitKey }];
+            // LUẬT CHUNG THỦY 1-1: Dọn dẹp mớ bòng bong
+            // Lọc ra những đường cũ KHÔNG dính dáng gì đến 2 cái chấm mà bé vừa nối
+            const filteredPaths = completedPathsRef.current.filter(
+              p => p.startKey !== prevPath.startKey && p.endKey !== prevPath.startKey && 
+                   p.startKey !== hitKey && p.endKey !== hitKey
+            );
+            
+            // Đưa sợi dây mới tinh tươm vào danh sách đã lọc dọn
+            const newCompleted = [...filteredPaths, { ...prevPath, points: snappedPoints, endKey: hitKey }];
             
             completedPathsRef.current = newCompleted;
             setCompletedPathsState(newCompleted);
             
+            // Chỉ khi nào đếm đủ 5 sợi dây trên màn hình thì mới chốt sổ chấm điểm
             if (newCompleted.length === 5) {
               let dung = 0;
               newCompleted.forEach(p => {
@@ -327,11 +336,10 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 10, // Giảm padding viền để ưu tiên không gian cho ảnh bự
+    padding: 10, 
     backgroundColor: '#F9FAFB',
   },
   column: {
-    // Thu hẹp cột từ 45% xuống 40% để ép khoảng trống ở giữa (gameArea gap) rộng ra gấp đôi
     width: '40%', 
     justifyContent: 'space-around',
     zIndex: 10,
@@ -340,16 +348,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    height: 180, // Tăng chiều cao hàng từ 100 lên 180 để chứa vừa ảnh bự gấp đôi
+    height: 180, 
   },
   image: {
-    // KÍCH THƯỚC HÌNH ẢNH TO GẤP ĐÔI (80x80 -> 160x160)
     width: 160,
     height: 160,
     borderRadius: 20,
     borderWidth: 2,
     borderColor: '#E5E7EB',
-    // Giảm marginRight để nhường chỗ cho độ rộng của ảnh
     marginRight: 10, 
     backgroundColor: 'white'
   },
@@ -362,7 +368,6 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   wordText: {
-    // KÍCH THƯỚC CHỮ GIỮ NGUYÊN
     fontSize: 50, 
     fontFamily: 'HP001', 
     color: '#1F2937',
