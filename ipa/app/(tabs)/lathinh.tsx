@@ -1,15 +1,18 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, PanResponder, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { supabase } from '../../utils/supabaseConfig';
-import ConfettiCannon from 'react-native-confetti-cannon';
+import { Video, ResizeMode } from 'expo-av';
+
+// Nhập khẩu nguyên cái sở thú tự động từ cỗ máy tao_data.js
+import { KHO_DONG_VAT } from '../../constants/kho_dong_vat';
 
 const { width } = Dimensions.get('window');
 
 // ==========================================
-// HÀM TẠO ĐỀ TOÁN CHUNG CHO CẢ 3 TRÒ
+// HÀM TẠO ĐỀ TOÁN CHUNG
 // ==========================================
 const generateMathProblem = (limit: number) => {
   let num1 = Math.floor(Math.random() * limit);
@@ -29,218 +32,109 @@ const generateMathProblem = (limit: number) => {
 };
 
 // ==========================================
-// GAME 1: BẮN BONG BÓNG 🎈 (BẦU TRỜI)
+// GAME 1: CHO ĐỘNG VẬT ĂN 🐰🥣
 // ==========================================
-const BongBongGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => void }) => {
+const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => void }) => {
+  
+  // Tèo sắm một cái rổ để chứa những con vật chưa được lên tivi
+  const unseenAnimalsRef = useRef<any[]>([]);
+
+  // Tuyệt chiêu "bốc thăm không hoàn lại"
+  const getNextAnimal = useCallback(() => {
+    // Nếu kho rỗng thì chịu thua
+    if (!KHO_DONG_VAT || KHO_DONG_VAT.length === 0) return null;
+    
+    // Nếu rổ đã cạn (đã diễn hết một vòng), lùa hết thú vào lại rổ và xóc lên
+    if (unseenAnimalsRef.current.length === 0) {
+      unseenAnimalsRef.current = [...KHO_DONG_VAT].sort(() => Math.random() - 0.5);
+    }
+    
+    // Bốc 1 em ra khỏi rổ
+    return unseenAnimalsRef.current.pop();
+  }, []);
+
   const [problem, setProblem] = useState(() => generateMathProblem(maxLimit));
-  const [isVictory, setIsVictory] = useState(false);
+  const [videoState, setVideoState] = useState<'idle' | 'eating' | 'crying'>('idle');
+  
+  // Khởi tạo con vật đầu tiên từ cái rổ
+  const [currentAnimal, setCurrentAnimal] = useState(() => getNextAnimal());
 
-  const allBubbles = [...problem.options];
-  while (allBubbles.length < 6) {
-    let wrongAns = Math.floor(Math.random() * (maxLimit + 5));
-    if (!allBubbles.includes(wrongAns)) allBubbles.push(wrongAns);
-  }
-  allBubbles.sort(() => Math.random() - 0.5);
+  const handleAnswer = (ans: number) => {
+    if (videoState !== 'idle' || !currentAnimal) return;
 
-  const bubbleColors = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
-
-  const handlePop = (ans: number) => {
     if (ans === problem.correctAns) {
-      setIsVictory(true);
-      setTimeout(() => {
-        setIsVictory(false);
-        setProblem(generateMathProblem(maxLimit));
-      }, 1500); 
+      setVideoState('eating');
+    } else {
+      setVideoState('crying');
     }
   };
 
+  const handleVideoFinish = (status: any) => {
+    if (status.isLoaded && status.didJustFinish) {
+      if (videoState === 'eating') {
+        // Ăn xong: Chuyển đề toán mới, bốc thú CÒN LẠI TRONG RỔ lên diễn
+        setProblem(generateMathProblem(maxLimit));
+        setCurrentAnimal(getNextAnimal());
+        setVideoState('idle');
+      } else if (videoState === 'crying') {
+        setVideoState('idle');
+      }
+    }
+  };
+
+  if (!currentAnimal) {
+    return (
+      <View style={[styles.gameContainer, { backgroundColor: '#FEF3C7', justifyContent: 'center', alignItems: 'center' }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+          <Ionicons name="arrow-back-circle" size={50} color="#D97706" />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#B45309', textAlign: 'center', padding: 20 }}>
+          Đại ca ơi, rạp xiếc chưa có con vật nào! Đại ca hãy quăng hình và video vào trạm nhập hàng rồi chạy tool nha!
+        </Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.gameContainer, { backgroundColor: '#87CEEB' }]}> 
-      {isVictory && <ConfettiCannon count={150} origin={{x: -10, y: 0}} fallSpeed={800} fadeOut={true} />}
-      
+    <View style={[styles.gameContainer, { backgroundColor: '#FEF3C7' }]}>
       <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-        <Ionicons name="arrow-back-circle" size={50} color="#1E3A8A" />
+        <Ionicons name="arrow-back-circle" size={50} color="#D97706" />
       </TouchableOpacity>
 
-      <Text style={styles.sunEmoji}>☀️</Text>
-      <Text style={styles.cloudEmoji1}>☁️</Text>
-      <Text style={styles.cloudEmoji2}>☁️</Text>
-      <Text style={styles.birdEmoji}>🕊️</Text>
-      
-      <View style={[styles.problemBoard, { zIndex: 10 }]}>
+      <View style={styles.animalScreen}>
+        {videoState === 'idle' ? (
+          <Image 
+            source={currentAnimal.image} 
+            style={styles.animalMedia} 
+            resizeMode="cover" 
+          />
+        ) : (
+          <Video
+            source={videoState === 'eating' ? currentAnimal.videoAn : currentAnimal.videoKhoc}
+            style={styles.animalMedia}
+            resizeMode={ResizeMode.COVER}
+            shouldPlay
+            onPlaybackStatusUpdate={handleVideoFinish}
+          />
+        )}
+      </View>
+
+      <View style={styles.problemBoard}>
         <Text style={styles.problemText}>{problem.num1} + {problem.num2} = ?</Text>
       </View>
 
-      <View style={styles.bubbleArea}>
-        {allBubbles.map((ans, index) => (
+      <View style={styles.answerArea}>
+        {problem.options.map((ans, index) => (
           <TouchableOpacity 
             key={index} 
+            style={styles.foodItem}
             activeOpacity={0.7}
-            style={[styles.bubble, { backgroundColor: bubbleColors[index % bubbleColors.length] }]}
-            onPress={() => handlePop(ans)}
+            onPress={() => handleAnswer(ans)}
           >
-            <View style={styles.bubbleReflection} />
-            <Text style={styles.bubbleText}>{ans}</Text>
+            {/* Tèo đổi sang cái bát đồ ăn chung chung nè */}
+            <Text style={styles.foodEmoji}>🥣</Text>
+            <Text style={styles.foodText}>{ans}</Text>
           </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-};
-
-// ==========================================
-// GAME 2: ẾCH XANH VƯỢT SÔNG 🐸 (NHẢY SEN / RỚT SÔNG)
-// ==========================================
-const EchXanhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => void }) => {
-  const [problem, setProblem] = useState(() => generateMathProblem(maxLimit));
-  const [isVictory, setIsVictory] = useState(false);
-  
-  // Tèo thêm state độ trong suốt để làm hiệu ứng chìm dưới sông
-  const frogAnimY = useRef(new Animated.Value(0)).current;
-  const frogOpacity = useRef(new Animated.Value(1)).current;
-
-  const handleJump = (ans: number) => {
-    if (ans === problem.correctAns) {
-      // Nhảy ĐÚNG: Búng lên cao rồi đáp phịch xuống lá sen bự
-      Animated.sequence([
-        Animated.timing(frogAnimY, { toValue: -40, duration: 150, useNativeDriver: true }),
-        Animated.timing(frogAnimY, { toValue: 160, duration: 250, useNativeDriver: true })
-      ]).start(() => {
-        setIsVictory(true);
-        setTimeout(() => {
-          setIsVictory(false);
-          frogAnimY.setValue(0);
-          setProblem(generateMathProblem(maxLimit));
-        }, 1500);
-      });
-    } else {
-      // Nhảy SAI: Búng lên cao, hụt lá sen, rớt tõm xuống sông và chìm lỉm
-      Animated.sequence([
-        Animated.timing(frogAnimY, { toValue: -40, duration: 150, useNativeDriver: true }),
-        Animated.timing(frogAnimY, { toValue: 260, duration: 250, useNativeDriver: true }),
-        Animated.timing(frogOpacity, { toValue: 0, duration: 200, useNativeDriver: true })
-      ]).start(() => {
-        // Chờ 1 chút cho bé thấy cảnh chìm, rồi lóp ngóp bò lên bờ lại
-        setTimeout(() => {
-          frogAnimY.setValue(0);
-          frogOpacity.setValue(1); 
-        }, 800);
-      });
-    }
-  };
-
-  return (
-    <View style={[styles.gameContainer, { backgroundColor: '#3B82F6' }]}> 
-      {isVictory && <ConfettiCannon count={150} origin={{x: -10, y: 0}} fallSpeed={800} fadeOut={true} />}
-      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-        <Ionicons name="arrow-back-circle" size={50} color="white" />
-      </TouchableOpacity>
-
-      <View style={styles.grassBank}>
-        <View style={styles.riverHeader}>
-          <Text style={styles.frogQuestion}>Ếch nhảy vào số: {problem.num1} + {problem.num2}</Text>
-        </View>
-
-        {/* LÁ SEN ĐÍCH CHÀ BÁ NẰM MÉP SÔNG NÈ ĐẠI CA */}
-        <Text style={styles.bigLilyPadDest}>🍃</Text>
-
-        <Animated.Text style={[styles.frogEmoji, { 
-          transform: [{ translateY: frogAnimY }],
-          opacity: frogOpacity
-        }]}>
-          🐸
-        </Animated.Text>
-        
-        <Text style={styles.grassDecor1}>🌾</Text>
-        <Text style={styles.grassDecor2}>🌿</Text>
-      </View>
-
-      <View style={styles.riverBody}>
-        <Text style={styles.wave1}>🌊</Text>
-        <Text style={styles.wave2}>🌊</Text>
-        <Text style={styles.wave3}>🌊</Text>
-        <Text style={styles.fishEmoji}>🐠</Text>
-
-        <View style={styles.riverBottom}>
-          {problem.options.map((ans, index) => (
-            <TouchableOpacity key={index} style={styles.lilyPad} onPress={() => handleJump(ans)}>
-              <Text style={styles.lilyEmoji}>🍃</Text>
-              <Text style={styles.lilyPadText}>{ans}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    </View>
-  );
-};
-
-// ==========================================
-// GAME 3: VUA KHỈ HẢO NGỌT 🐒🍌 (RỪNG RẬM)
-// ==========================================
-const BananaItem = ({ option, onDrop }: { option: number, onDrop: (ans: number) => void }) => {
-  const pan = useRef(new Animated.ValueXY()).current;
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
-      onPanResponderRelease: (e, gesture) => {
-        if (gesture.dy < -120) {
-          onDrop(option);
-          setTimeout(() => pan.setValue({ x: 0, y: 0 }), 300);
-        } else {
-          Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
-        }
-      }
-    })
-  ).current;
-
-  return (
-    <Animated.View style={[styles.bananaWrapper, { transform: pan.getTranslateTransform() }]} {...panResponder.panHandlers}>
-      <Text style={styles.bananaEmoji}>🍌</Text>
-      <Text style={styles.bananaText}>{option}</Text>
-    </Animated.View>
-  );
-};
-
-const VuaKhiGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => void }) => {
-  const [problem, setProblem] = useState(() => generateMathProblem(maxLimit));
-  const [isVictory, setIsVictory] = useState(false);
-  const [problemId, setProblemId] = useState(0);
-
-  const handleDrop = (ans: number) => {
-    if (ans === problem.correctAns) {
-      setIsVictory(true);
-      setTimeout(() => {
-        setIsVictory(false);
-        setProblem(generateMathProblem(maxLimit));
-        setProblemId(prev => prev + 1); 
-      }, 1500); 
-    }
-  };
-
-  return (
-    <View style={[styles.gameContainer, { backgroundColor: '#D9F99D' }]}>
-      {isVictory && <ConfettiCannon count={150} origin={{x: -10, y: 0}} fallSpeed={800} fadeOut={true} />}
-      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-        <Ionicons name="arrow-back-circle" size={50} color="#14532D" />
-      </TouchableOpacity>
-
-      <Text style={styles.jungleTree1}>🌴</Text>
-      <Text style={styles.jungleTree2}>🌴</Text>
-      <Text style={styles.jungleVine1}>🌿</Text>
-      <Text style={styles.jungleVine2}>🌿</Text>
-
-      <View style={styles.monkeyArea}>
-        <Text style={styles.monkeyEmoji}>{isVictory ? '🐵' : '🐒'}</Text>
-        <View style={styles.monkeyBelly}>
-          <Text style={styles.monkeyProblem}>{problem.num1} + {problem.num2}</Text>
-        </View>
-        <Text style={styles.guideText}>(Bé vuốt chuối đút khỉ ăn nha)</Text>
-      </View>
-
-      <View style={styles.bananaArea}>
-        {problem.options.map((ans, index) => (
-          <BananaItem key={`${problemId}-${index}`} option={ans} onDrop={handleDrop} />
         ))}
       </View>
     </View>
@@ -253,7 +147,8 @@ const VuaKhiGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => void
 export default function TroChoiHubScreen() {
   const { colors } = useTheme();
   const [maxLimit, setMaxLimit] = useState(10);
-  const [currentGame, setCurrentGame] = useState<'menu' | 'bongbong' | 'echxanh' | 'vuakhi'>('menu');
+  
+  const [currentGame, setCurrentGame] = useState<'menu' | 'cho_an' | 'game2' | 'game3'>('menu');
 
   useFocusEffect(
     useCallback(() => {
@@ -268,9 +163,7 @@ export default function TroChoiHubScreen() {
     }, [])
   );
 
-  if (currentGame === 'bongbong') return <BongBongGame maxLimit={maxLimit} onBack={() => setCurrentGame('menu')} />;
-  if (currentGame === 'echxanh') return <EchXanhGame maxLimit={maxLimit} onBack={() => setCurrentGame('menu')} />;
-  if (currentGame === 'vuakhi') return <VuaKhiGame maxLimit={maxLimit} onBack={() => setCurrentGame('menu')} />;
+  if (currentGame === 'cho_an') return <ChoDongVatAnGame maxLimit={maxLimit} onBack={() => setCurrentGame('menu')} />;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -279,19 +172,28 @@ export default function TroChoiHubScreen() {
       </View>
 
       <View style={styles.menuContainer}>
-        <TouchableOpacity style={[styles.menuCard, { borderColor: '#EC4899', backgroundColor: '#FDF2F8' }]} onPress={() => setCurrentGame('bongbong')}>
-          <Text style={styles.menuIcon}>🎈</Text>
-          <Text style={[styles.menuTitle, { color: '#BE185D' }]}>Bắn Bong Bóng</Text>
+        <TouchableOpacity style={[styles.menuCard, { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' }]} onPress={() => setCurrentGame('cho_an')}>
+          <Text style={styles.menuIcon}>🐰</Text>
+          <View>
+            <Text style={[styles.menuTitle, { color: '#B45309' }]}>Cho Động Vật Ăn</Text>
+            <Text style={{ color: '#D97706', fontSize: 16 }}>Cho thú cưng ăn nào!</Text>
+          </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.menuCard, { borderColor: '#10B981', backgroundColor: '#ECFDF5' }]} onPress={() => setCurrentGame('echxanh')}>
-          <Text style={styles.menuIcon}>🐸</Text>
-          <Text style={[styles.menuTitle, { color: '#047857' }]}>Ếch Vượt Sông</Text>
+        <TouchableOpacity style={[styles.menuCard, { borderColor: '#9CA3AF', backgroundColor: '#F3F4F6', opacity: 0.7 }]} disabled>
+          <Text style={styles.menuIcon}>🚧</Text>
+          <View>
+            <Text style={[styles.menuTitle, { color: '#4B5563' }]}>Trò Chơi Số 2</Text>
+            <Text style={{ color: '#6B7280', fontSize: 16 }}>Đang xây dựng...</Text>
+          </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.menuCard, { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' }]} onPress={() => setCurrentGame('vuakhi')}>
-          <Text style={styles.menuIcon}>🐒</Text>
-          <Text style={[styles.menuTitle, { color: '#B45309' }]}>Vua Khỉ Hảo Ngọt</Text>
+        <TouchableOpacity style={[styles.menuCard, { borderColor: '#9CA3AF', backgroundColor: '#F3F4F6', opacity: 0.7 }]} disabled>
+          <Text style={styles.menuIcon}>🚧</Text>
+          <View>
+            <Text style={[styles.menuTitle, { color: '#4B5563' }]}>Trò Chơi Số 3</Text>
+            <Text style={{ color: '#6B7280', fontSize: 16 }}>Đang xây dựng...</Text>
+          </View>
         </TouchableOpacity>
       </View>
     </View>
@@ -308,53 +210,56 @@ const styles = StyleSheet.create({
   menuTitle: { fontSize: 26, fontWeight: '900' },
 
   gameContainer: { flex: 1, overflow: 'hidden' },
-  backBtn: { position: 'absolute', top: 20, left: 20, zIndex: 99 },
+  backBtn: { position: 'absolute', top: 20, left: 20, zIndex: 99, backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 30 },
 
-  // Bong Bong Styles
-  sunEmoji: { position: 'absolute', top: 40, right: 30, fontSize: 80, zIndex: 1 },
-  cloudEmoji1: { position: 'absolute', top: 120, left: 20, fontSize: 60, opacity: 0.8, zIndex: 1 },
-  cloudEmoji2: { position: 'absolute', top: 80, right: 120, fontSize: 50, opacity: 0.7, zIndex: 1 },
-  birdEmoji: { position: 'absolute', top: 200, right: 40, fontSize: 40, zIndex: 1 },
-  problemBoard: { alignSelf: 'center', marginTop: 80, backgroundColor: 'white', paddingHorizontal: 40, paddingVertical: 20, borderRadius: 30, borderWidth: 5, borderColor: '#3B82F6', elevation: 8 },
-  problemText: { fontSize: 45, fontWeight: '900', color: '#1E3A8A' },
-  bubbleArea: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignContent: 'center', padding: 20, zIndex: 10 },
-  bubble: { width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', margin: 15, borderWidth: 3, borderColor: 'rgba(255,255,255,0.7)', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3 },
-  bubbleReflection: { position: 'absolute', top: 10, left: 15, width: 25, height: 15, backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 10, transform: [{ rotate: '-45deg' }] },
-  bubbleText: { fontSize: 40, fontWeight: '900', color: 'white', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 },
-
-  // Ech Xanh Styles 
-  grassBank: { height: '35%', backgroundColor: '#4ADE80', borderBottomWidth: 5, borderBottomColor: '#166534', zIndex: 10 },
-  riverHeader: { alignSelf: 'center', marginTop: 40, backgroundColor: 'white', padding: 15, borderRadius: 20, borderWidth: 4, borderColor: '#059669', zIndex: 15 },
-  frogQuestion: { fontSize: 24, fontWeight: 'bold', color: '#065F46' },
-  
-  // Style cho chiếc lá sen đích bự chà bá
-  bigLilyPadDest: { position: 'absolute', bottom: -70, alignSelf: 'center', fontSize: 140, zIndex: 5, transform: [{ rotate: '190deg' }] },
-  
-  frogEmoji: { fontSize: 100, alignSelf: 'center', marginTop: 10, zIndex: 20 },
-  grassDecor1: { position: 'absolute', bottom: 10, left: 30, fontSize: 40 },
-  grassDecor2: { position: 'absolute', bottom: 10, right: 40, fontSize: 50 },
-  riverBody: { flex: 1, backgroundColor: '#3B82F6' },
-  wave1: { position: 'absolute', top: 20, left: 50, fontSize: 40, opacity: 0.6 },
-  wave2: { position: 'absolute', top: 80, right: 60, fontSize: 50, opacity: 0.5 },
-  wave3: { position: 'absolute', top: 140, left: '40%', fontSize: 30, opacity: 0.4 },
-  fishEmoji: { position: 'absolute', top: 100, left: 20, fontSize: 30, opacity: 0.8 },
-  riverBottom: { flex: 1, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', paddingBottom: 40, zIndex: 10 },
-  lilyPad: { alignItems: 'center' },
-  lilyEmoji: { fontSize: 80, marginBottom: -40 },
-  lilyPadText: { fontSize: 35, fontWeight: '900', color: 'white', zIndex: 2, textShadowColor: '#000', textShadowOffset: { width: 2, height: 2 }, textShadowRadius: 3 },
-
-  // Vua Khi Styles 
-  jungleTree1: { position: 'absolute', top: -20, left: -20, fontSize: 120, zIndex: 1 },
-  jungleTree2: { position: 'absolute', top: 40, right: -30, fontSize: 100, zIndex: 1 },
-  jungleVine1: { position: 'absolute', top: 0, left: 100, fontSize: 80, zIndex: 1 },
-  jungleVine2: { position: 'absolute', top: -10, right: 100, fontSize: 70, zIndex: 1 },
-  monkeyArea: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50, zIndex: 10 },
-  monkeyEmoji: { fontSize: 130 },
-  monkeyBelly: { backgroundColor: '#FCD34D', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, marginTop: -20, borderWidth: 4, borderColor: '#B45309' },
-  monkeyProblem: { fontSize: 35, fontWeight: '900', color: '#78350F' },
-  guideText: { fontSize: 18, color: '#92400E', marginTop: 15, fontWeight: 'bold', backgroundColor: 'rgba(255,255,255,0.6)', padding: 5, borderRadius: 10 },
-  bananaArea: { flexDirection: 'row', justifyContent: 'space-around', paddingBottom: 50, zIndex: 10 },
-  bananaWrapper: { alignItems: 'center', padding: 10 },
-  bananaEmoji: { fontSize: 80 },
-  bananaText: { fontSize: 35, fontWeight: '900', color: '#B45309', marginTop: -20, backgroundColor: 'white', borderRadius: 15, paddingHorizontal: 15, borderWidth: 3, borderColor: '#F59E0B' }
+  animalScreen: { 
+    width: '100%', 
+    aspectRatio: 16/9, 
+    backgroundColor: '#000', 
+    marginTop: 0,
+    borderBottomWidth: 5,
+    borderBottomColor: '#B45309',
+    elevation: 10
+  },
+  animalMedia: {
+    width: '100%',
+    height: '100%'
+  },
+  problemBoard: { 
+    alignSelf: 'center', 
+    marginTop: 40, 
+    backgroundColor: 'white', 
+    paddingHorizontal: 50, 
+    paddingVertical: 20, 
+    borderRadius: 30, 
+    borderWidth: 5, 
+    borderColor: '#3B82F6', 
+    elevation: 8 
+  },
+  problemText: { fontSize: 50, fontWeight: '900', color: '#1E3A8A' },
+  answerArea: { 
+    flex: 1, 
+    flexDirection: 'row', 
+    justifyContent: 'space-around', 
+    alignItems: 'center', 
+    paddingBottom: 30,
+    paddingHorizontal: 10
+  },
+  foodItem: { 
+    alignItems: 'center', 
+    padding: 10 
+  },
+  foodEmoji: { fontSize: 80 },
+  foodText: { 
+    fontSize: 40, 
+    fontWeight: '900', 
+    color: '#B45309', 
+    marginTop: -20, 
+    backgroundColor: 'white', 
+    borderRadius: 20, 
+    paddingHorizontal: 20, 
+    borderWidth: 4, 
+    borderColor: '#F59E0B',
+    elevation: 5
+  }
 });
