@@ -1,357 +1,313 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, ScrollView, Alert, Platform, useWindowDimensions } from 'react-native';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, PanResponder, Platform } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../utils/supabaseConfig';
 import ConfettiCannon from 'react-native-confetti-cannon';
 
-// Lấy kho ảnh từ Tập Đọc sang làm mồi nhử
-import { TAP_DOC_DATA } from '../../constants/kho_tap_doc';
+const { width } = Dimensions.get('window');
 
-type Piece = {
-  id: number;
-  row: number;
-  col: number;
-  flipped: boolean;
-  isError: boolean;
-  num1: number;
-  num2: number;
+// ==========================================
+// HÀM TẠO ĐỀ TOÁN CHUNG CHO CẢ 3 TRÒ
+// ==========================================
+const generateMathProblem = (limit: number) => {
+  let num1 = Math.floor(Math.random() * limit);
+  let num2 = Math.floor(Math.random() * (limit - num1));
+  if (limit <= 1) { num1 = 0; num2 = 1; }
+  
+  const correctAns = num1 + num2;
+  
+  // Tạo 3 đáp án ngẫu nhiên (có 1 đáp án đúng)
+  let options = [correctAns];
+  while (options.length < 3) {
+    let wrongAns = Math.floor(Math.random() * (limit + 2));
+    if (!options.includes(wrongAns)) options.push(wrongAns);
+  }
+  // Trộn lên
+  options.sort(() => Math.random() - 0.5);
+  
+  return { num1, num2, correctAns, options };
 };
 
-export default function LatHinhScreen() {
-  const { colors } = useTheme();
-  
-  const { width } = useWindowDimensions();
-
-  const BOARD_BORDER = 4;
-  const BOARD_WIDTH = Platform.OS === 'web' ? Math.min(width * 0.85, 500) : width * 0.85;
-  // Tèo gọt cái thớt thành hình vuông hoàn hảo luôn để mảnh ghép ra hình vuông 2x2
-  const BOARD_HEIGHT = BOARD_WIDTH; 
-  
-  const INNER_BOARD_WIDTH = BOARD_WIDTH - BOARD_BORDER * 2;
-  const INNER_BOARD_HEIGHT = BOARD_HEIGHT - BOARD_BORDER * 2;
-  
-  // Chia đôi cả rộng và cao để ra 4 ô vuông 2x2
-  const PIECE_WIDTH = INNER_BOARD_WIDTH / 2;
-  const PIECE_HEIGHT = INNER_BOARD_HEIGHT / 2;
-
-  const [maxLimit, setMaxLimit] = useState(10);
-  const [currentImage, setCurrentImage] = useState<any>(null);
-  const [pieces, setPieces] = useState<Piece[]>([]);
-  
-  const [activePieceId, setActivePieceId] = useState<number | null>(null);
-  const [userAnswer, setUserAnswer] = useState('');
-  
-  const [stickers, setStickers] = useState<string[]>([]);
-  const [showStickerBook, setShowStickerBook] = useState(false);
+// ==========================================
+// GAME 1: BẮN BONG BÓNG 🎈
+// ==========================================
+const BongBongGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => void }) => {
+  const [problem, setProblem] = useState(() => generateMathProblem(maxLimit));
   const [isVictory, setIsVictory] = useState(false);
+
+  // Tạo thêm 3 bóng sai nữa cho màn hình nó xôm
+  const allBubbles = [...problem.options];
+  while (allBubbles.length < 6) {
+    let wrongAns = Math.floor(Math.random() * (maxLimit + 5));
+    if (!allBubbles.includes(wrongAns)) allBubbles.push(wrongAns);
+  }
+  allBubbles.sort(() => Math.random() - 0.5);
+
+  const bubbleColors = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
+
+  const handlePop = (ans: number) => {
+    if (ans === problem.correctAns) {
+      setIsVictory(true);
+      setTimeout(() => {
+        setIsVictory(false);
+        setProblem(generateMathProblem(maxLimit));
+      }, 2500);
+    }
+  };
+
+  return (
+    <View style={styles.gameContainer}>
+      {isVictory && <ConfettiCannon count={150} origin={{x: -10, y: 0}} fallSpeed={2000} />}
+      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+        <Ionicons name="arrow-back-circle" size={50} color="#EF4444" />
+      </TouchableOpacity>
+      
+      <View style={styles.problemBoard}>
+        <Text style={styles.problemText}>{problem.num1} + {problem.num2} = ?</Text>
+      </View>
+
+      <View style={styles.bubbleArea}>
+        {allBubbles.map((ans, index) => (
+          <TouchableOpacity 
+            key={index} 
+            activeOpacity={0.7}
+            style={[styles.bubble, { backgroundColor: bubbleColors[index % bubbleColors.length] }]}
+            onPress={() => handlePop(ans)}
+          >
+            <Text style={styles.bubbleText}>{ans}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+// ==========================================
+// GAME 2: ẾCH XANH VƯỢT SÔNG 🐸
+// ==========================================
+const EchXanhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => void }) => {
+  const [problem, setProblem] = useState(() => generateMathProblem(maxLimit));
+  const [isVictory, setIsVictory] = useState(false);
+  const frogAnim = useRef(new Animated.Value(0)).current;
+
+  const handleJump = (ans: number) => {
+    if (ans === problem.correctAns) {
+      // Ếch nhảy xuống lá sen
+      Animated.sequence([
+        Animated.timing(frogAnim, { toValue: 150, duration: 300, useNativeDriver: true }),
+        Animated.spring(frogAnim, { toValue: 120, friction: 3, useNativeDriver: true })
+      ]).start(() => {
+        setIsVictory(true);
+        setTimeout(() => {
+          setIsVictory(false);
+          frogAnim.setValue(0); // Ếch về bờ
+          setProblem(generateMathProblem(maxLimit));
+        }, 2000);
+      });
+    } else {
+      // Nhảy hụt (lắc lư nhẹ)
+      Animated.sequence([
+        Animated.timing(frogAnim, { toValue: 10, duration: 100, useNativeDriver: true }),
+        Animated.timing(frogAnim, { toValue: -10, duration: 100, useNativeDriver: true }),
+        Animated.timing(frogAnim, { toValue: 0, duration: 100, useNativeDriver: true })
+      ]).start();
+    }
+  };
+
+  return (
+    <View style={[styles.gameContainer, { backgroundColor: '#E0F2FE' }]}>
+      {isVictory && <ConfettiCannon count={100} origin={{x: -10, y: 0}} fallSpeed={2000} />}
+      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+        <Ionicons name="arrow-back-circle" size={50} color="#0284C7" />
+      </TouchableOpacity>
+
+      <View style={styles.riverHeader}>
+        <Text style={styles.frogQuestion}>Ếch cần nhảy vào số: {problem.num1} + {problem.num2}</Text>
+      </View>
+
+      <Animated.Text style={[styles.frogEmoji, { transform: [{ translateY: frogAnim }] }]}>
+        🐸
+      </Animated.Text>
+
+      <View style={styles.riverBottom}>
+        {problem.options.map((ans, index) => (
+          <TouchableOpacity key={index} style={styles.lilyPad} onPress={() => handleJump(ans)}>
+            <Text style={styles.lilyEmoji}>🍃</Text>
+            <Text style={styles.lilyPadText}>{ans}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+// ==========================================
+// GAME 3: VUA KHỈ HẢO NGỌT (KÉO THẢ) 🐒🍌
+// ==========================================
+const BananaItem = ({ option, onDrop }: { option: number, onDrop: (ans: number) => void }) => {
+  const pan = useRef(new Animated.ValueXY()).current;
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
+      onPanResponderRelease: (e, gesture) => {
+        // Nếu bé kéo quả chuối bay ngược lên trên hơn 120 pixel -> Tính là đút cho khỉ
+        if (gesture.dy < -120) {
+          onDrop(option);
+          // Giấu quả chuối về chỗ cũ âm thầm sau 0.5s
+          setTimeout(() => pan.setValue({ x: 0, y: 0 }), 500);
+        } else {
+          // Trượt tay -> Chuối bật nảy về chỗ cũ
+          Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
+        }
+      }
+    })
+  ).current;
+
+  return (
+    <Animated.View style={[styles.bananaWrapper, { transform: pan.getTranslateTransform() }]} {...panResponder.panHandlers}>
+      <Text style={styles.bananaEmoji}>🍌</Text>
+      <Text style={styles.bananaText}>{option}</Text>
+    </Animated.View>
+  );
+};
+
+const VuaKhiGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => void }) => {
+  const [problem, setProblem] = useState(() => generateMathProblem(maxLimit));
+  const [isVictory, setIsVictory] = useState(false);
+
+  const handleDrop = (ans: number) => {
+    if (ans === problem.correctAns) {
+      setIsVictory(true);
+      setTimeout(() => {
+        setIsVictory(false);
+        setProblem(generateMathProblem(maxLimit));
+      }, 2000);
+    }
+  };
+
+  return (
+    <View style={[styles.gameContainer, { backgroundColor: '#FEF3C7' }]}>
+      {isVictory && <ConfettiCannon count={100} origin={{x: -10, y: 0}} fallSpeed={2000} />}
+      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+        <Ionicons name="arrow-back-circle" size={50} color="#D97706" />
+      </TouchableOpacity>
+
+      <View style={styles.monkeyArea}>
+        <Text style={styles.monkeyEmoji}>{isVictory ? '🐵' : '🐒'}</Text>
+        <View style={styles.monkeyBelly}>
+          <Text style={styles.monkeyProblem}>{problem.num1} + {problem.num2}</Text>
+        </View>
+        <Text style={styles.guideText}>(Bé vuốt chuối lên mớm cho khỉ nha)</Text>
+      </View>
+
+      <View style={styles.bananaArea}>
+        {problem.options.map((ans, index) => (
+          <BananaItem key={index} option={ans} onDrop={handleDrop} />
+        ))}
+      </View>
+    </View>
+  );
+};
+
+// ==========================================
+// MÀN HÌNH CHÍNH QUẢN LÝ 3 TRÒ CHƠI
+// ==========================================
+export default function TroChoiHubScreen() {
+  const { colors } = useTheme();
+  const [maxLimit, setMaxLimit] = useState(10);
+  
+  // State cực kỳ quan trọng: Quyết định đang ở menu hay ở game nào.
+  // Nhờ state này mà khi bé nhảy qua tab khác xong quay lại, game vẫn nằm y nguyên đó!
+  const [currentGame, setCurrentGame] = useState<'menu' | 'bongbong' | 'echxanh' | 'vuakhi'>('menu');
 
   useFocusEffect(
     useCallback(() => {
-      fetchData();
+      // Mỗi lần focus lại tab, Tèo CHỈ cập nhật giới hạn toán mới nhất (lỡ bố mẹ đổi trong Cài đặt),
+      // TUYỆT ĐỐI KHÔNG reset currentGame về 'menu' để bảo toàn trạng thái game.
+      const fetchLimit = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await supabase.from('be_hoc_toan_data').select('max_limit').eq('user_id', user.id).single();
+          if (data?.max_limit) setMaxLimit(data.max_limit);
+        }
+      };
+      fetchLimit();
     }, [])
   );
 
-  const fetchData = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    let limit = 10;
-    if (user) {
-      const { data } = await supabase.from('be_hoc_toan_data').select('max_limit').eq('user_id', user.id).single();
-      if (data?.max_limit) limit = data.max_limit;
-    }
-    setMaxLimit(limit);
+  // Bộ định tuyến mini
+  if (currentGame === 'bongbong') return <BongBongGame maxLimit={maxLimit} onBack={() => setCurrentGame('menu')} />;
+  if (currentGame === 'echxanh') return <EchXanhGame maxLimit={maxLimit} onBack={() => setCurrentGame('menu')} />;
+  if (currentGame === 'vuakhi') return <VuaKhiGame maxLimit={maxLimit} onBack={() => setCurrentGame('menu')} />;
 
-    try {
-      const savedStickers = await AsyncStorage.getItem('sticker_book');
-      if (savedStickers) {
-        setStickers(JSON.parse(savedStickers));
-      }
-    } catch (e) {
-      console.log('Lỗi đọc kho sticker', e);
-    }
-
-    if (!currentImage) {
-      startNewGame(limit);
-    }
-  };
-
-  const generateQuestion = (limit: number) => {
-    let num1 = Math.floor(Math.random() * (limit - 1)) + 1;
-    let num2 = Math.floor(Math.random() * (limit - num1)) + 1;
-    if (limit <= 1) { num1 = 0; num2 = 1; }
-    return { num1, num2 };
-  };
-
-  const startNewGame = (limit: number = maxLimit) => {
-    if (!TAP_DOC_DATA || TAP_DOC_DATA.length === 0) return;
-    
-    const randImg = TAP_DOC_DATA[Math.floor(Math.random() * TAP_DOC_DATA.length)];
-    setCurrentImage(randImg);
-    setIsVictory(false);
-    setUserAnswer('');
-    setActivePieceId(null);
-
-    const newPieces: Piece[] = [];
-    let idCounter = 0;
-    // Tèo đổi lưới từ 3x2 thành 2x2 (2 hàng, 2 cột = 4 mảnh)
-    for (let row = 0; row < 2; row++) {
-      for (let col = 0; col < 2; col++) {
-        const { num1, num2 } = generateQuestion(limit);
-        newPieces.push({ id: idCounter++, row, col, flipped: false, isError: false, num1, num2 });
-      }
-    }
-    setPieces(newPieces);
-  };
-
-  const handlePiecePress = (id: number) => {
-    const piece = pieces.find(p => p.id === id);
-    if (piece && !piece.flipped) {
-      setUserAnswer('');
-      setActivePieceId(id);
-    }
-  };
-
-  const handleKeyPress = (val: string) => {
-    if (userAnswer.length < 3) {
-      setUserAnswer(prev => prev + val);
-    }
-  };
-
-  const handleDelete = () => {
-    setUserAnswer(prev => prev.slice(0, -1));
-  };
-
-  const handleSubmitAnswer = async () => {
-    if (!userAnswer) return;
-    
-    const activePiece = pieces.find(p => p.id === activePieceId);
-    if (!activePiece) return;
-
-    const correctAnswer = activePiece.num1 + activePiece.num2;
-    const isCorrect = parseInt(userAnswer, 10) === correctAnswer;
-
-    if (isCorrect) {
-      setActivePieceId(null);
-      const updatedPieces = pieces.map(p => p.id === activePieceId ? { ...p, flipped: true, isError: false } : p);
-      setPieces(updatedPieces);
-
-      const allFlipped = updatedPieces.every(p => p.flipped);
-      if (allFlipped) {
-        setIsVictory(true);
-        if (!stickers.includes(currentImage.word)) {
-          const newStickers = [...stickers, currentImage.word];
-          setStickers(newStickers);
-          await AsyncStorage.setItem('sticker_book', JSON.stringify(newStickers));
-        }
-      }
-    } else {
-      setActivePieceId(null);
-      setPieces(pieces.map(p => p.id === activePieceId ? { ...p, isError: true } : p));
-    }
-  };
-
-  const activePiece = pieces.find(p => p.id === activePieceId);
-
+  // MÀN HÌNH MENU CHỌN TRÒ CHƠI
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Lật Hình Giải Đố 🧩</Text>
-        <TouchableOpacity style={styles.stickerBtn} onPress={() => setShowStickerBook(true)}>
-          <Ionicons name="images" size={24} color="#B45309" />
-          <Text style={styles.stickerBtnText}>Sổ Sticker ({stickers.length})</Text>
+        <Text style={styles.title}>Rạp Xiếc Trò Chơi 🎪</Text>
+      </View>
+
+      <View style={styles.menuContainer}>
+        <TouchableOpacity style={[styles.menuCard, { borderColor: '#EC4899', backgroundColor: '#FDF2F8' }]} onPress={() => setCurrentGame('bongbong')}>
+          <Text style={styles.menuIcon}>🎈</Text>
+          <Text style={[styles.menuTitle, { color: '#BE185D' }]}>Bắn Bong Bóng</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.menuCard, { borderColor: '#10B981', backgroundColor: '#ECFDF5' }]} onPress={() => setCurrentGame('echxanh')}>
+          <Text style={styles.menuIcon}>🐸</Text>
+          <Text style={[styles.menuTitle, { color: '#047857' }]}>Ếch Vượt Sông</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.menuCard, { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' }]} onPress={() => setCurrentGame('vuakhi')}>
+          <Text style={styles.menuIcon}>🐒</Text>
+          <Text style={[styles.menuTitle, { color: '#B45309' }]}>Vua Khỉ Hảo Ngọt</Text>
         </TouchableOpacity>
       </View>
-
-      <View style={styles.boardContainer}>
-        {isVictory && <ConfettiCannon count={150} origin={{x: -10, y: 0}} fallSpeed={2500} />}
-        
-        {currentImage && (
-          <View style={[styles.board, isVictory && styles.boardVictory, { width: BOARD_WIDTH, height: BOARD_HEIGHT }]}>
-            {pieces.map((piece) => (
-              <TouchableOpacity
-                key={piece.id}
-                activeOpacity={0.8}
-                onPress={() => handlePiecePress(piece.id)}
-                style={[
-                  styles.pieceWrapper,
-                  { 
-                    width: PIECE_WIDTH, 
-                    height: PIECE_HEIGHT,
-                    backgroundColor: piece.flipped ? 'transparent' : piece.isError ? '#FECACA' : '#E5E7EB',
-                    borderColor: piece.isError ? '#EF4444' : 'white',
-                  }
-                ]}
-              >
-                {piece.flipped ? (
-                  <Image 
-                    source={currentImage.image} 
-                    style={{ 
-                      width: INNER_BOARD_WIDTH, 
-                      height: INNER_BOARD_HEIGHT, 
-                      position: 'absolute', 
-                      top: 0,  // <-- ĐÓNG ĐINH GÓC TRÊN
-                      left: 0, // <-- ĐÓNG ĐINH GÓC TRÁI
-                      transform: [
-                        { translateX: -(piece.col * PIECE_WIDTH) },
-                        { translateY: -(piece.row * PIECE_HEIGHT) }
-                      ]
-                    }} 
-                  />
-                ) : (
-                  <Ionicons 
-                    name={piece.isError ? "alert-circle" : "help-circle"} 
-                    size={60} // Tèo tăng size icon lên tí xíu cho cân đối với ô vuông bự
-                    color={piece.isError ? "#EF4444" : "#9CA3AF"} 
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {isVictory && (
-          <View style={styles.victoryPanel}>
-            <Text style={styles.victoryText}>Chúc mừng bé thu thập được:</Text>
-            <Text style={styles.victoryWord}>{currentImage?.word}</Text>
-            <TouchableOpacity style={styles.replayBtn} onPress={() => startNewGame()}>
-              <Text style={styles.replayBtnText}>Chơi Ảnh Khác 🔄</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      {activePieceId !== null && activePiece && (
-        <Modal visible={true} transparent animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <TouchableOpacity style={styles.closeBtn} onPress={() => setActivePieceId(null)}>
-                <Ionicons name="close" size={30} color="#EF4444" />
-              </TouchableOpacity>
-              
-              <Text style={styles.questionText}>Bé tính thử xem:</Text>
-              <View style={styles.mathBox}>
-                <Text style={styles.mathText}>{activePiece.num1} + {activePiece.num2} = </Text>
-                <View style={styles.answerBox}>
-                  <Text style={styles.answerText}>{userAnswer || '?'}</Text>
-                </View>
-              </View>
-
-              <View style={styles.numpadContainer}>
-                {[ [1,2,3], [4,5,6], [7,8,9] ].map((row, rIndex) => (
-                  <View key={rIndex} style={styles.numpadRow}>
-                    {row.map(num => (
-                      <TouchableOpacity key={num} style={styles.numpadBtn} onPress={() => handleKeyPress(num.toString())}>
-                        <Text style={styles.numpadText}>{num}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                ))}
-                <View style={styles.numpadRow}>
-                  <TouchableOpacity style={[styles.numpadBtn, { backgroundColor: '#FCA5A5' }]} onPress={handleDelete}>
-                    <Ionicons name="backspace" size={28} color="#991B1B" />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.numpadBtn} onPress={() => handleKeyPress('0')}>
-                    <Text style={styles.numpadText}>0</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.numpadBtn, { backgroundColor: '#10B981' }]} onPress={handleSubmitAnswer}>
-                    <Text style={[styles.numpadText, { color: 'white' }]}>OK</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
-
-      {/* SỔ TAY STICKER */}
-      <Modal visible={showStickerBook} animationType="fade">
-        <View style={styles.stickerBookContainer}>
-          <View style={styles.stickerHeader}>
-            <Text style={styles.stickerTitle}>🏆 Bộ Sưu Tập Của Bé 🏆</Text>
-            <TouchableOpacity onPress={() => setShowStickerBook(false)} style={styles.closeStickerBtn}>
-              <Ionicons name="close-circle" size={40} color="#EF4444" />
-            </TouchableOpacity>
-          </View>
-          
-          <ScrollView contentContainerStyle={styles.stickerGrid}>
-            {TAP_DOC_DATA.map((item, index) => {
-              const isUnlocked = stickers.includes(item.word);
-              return (
-                <View key={index} style={[styles.stickerItem, !isUnlocked && styles.stickerLocked]}>
-                  {isUnlocked ? (
-                    <>
-                      <Image source={item.image} style={styles.stickerImg} />
-                      <Text style={styles.stickerName}>{item.word}</Text>
-                    </>
-                  ) : (
-                    <Ionicons name="lock-closed" size={50} color="#9CA3AF" />
-                  )}
-                </View>
-              );
-            })}
-          </ScrollView>
-        </View>
-      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // Styles Menu Chung
   container: { flex: 1 },
-  header: { paddingVertical: 15, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FEF08A', borderBottomWidth: 3, borderBottomColor: '#FDE047' },
-  title: { fontSize: 26, fontWeight: '900', color: '#B45309' },
-  stickerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FDE68A', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 2, borderColor: '#F59E0B' },
-  stickerBtnText: { marginLeft: 5, fontWeight: 'bold', color: '#B45309' },
-  
-  boardContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  board: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    borderWidth: 4, 
-    borderColor: '#4B5563', 
-    borderRadius: 10, 
-    overflow: 'hidden', 
-    backgroundColor: 'white' 
-  },
-  boardVictory: { borderColor: '#10B981', shadowColor: '#10B981', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 20, elevation: 10 },
-  
-  pieceWrapper: { 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    overflow: 'hidden', 
-    borderWidth: 1 
-  },
-  
-  victoryPanel: { marginTop: 20, alignItems: 'center', backgroundColor: 'white', padding: 20, borderRadius: 20, borderWidth: 3, borderColor: '#FCD34D', elevation: 5 },
-  victoryText: { fontSize: 20, color: '#4B5563', fontWeight: 'bold' },
-  victoryWord: { fontSize: 40, fontWeight: '900', color: '#EF4444', marginVertical: 10, textTransform: 'uppercase' },
-  replayBtn: { backgroundColor: '#3B82F6', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 15, marginTop: 10 },
-  replayBtnText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
+  header: { paddingVertical: 15, alignItems: 'center', backgroundColor: '#FEF08A', borderBottomWidth: 3, borderBottomColor: '#FDE047' },
+  title: { fontSize: 28, fontWeight: '900', color: '#B45309' },
+  menuContainer: { flex: 1, padding: 20, justifyContent: 'center', alignItems: 'center' },
+  menuCard: { width: '90%', maxWidth: 400, flexDirection: 'row', alignItems: 'center', padding: 20, marginBottom: 20, borderRadius: 25, borderWidth: 4, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 5 },
+  menuIcon: { fontSize: 60, marginRight: 20 },
+  menuTitle: { fontSize: 26, fontWeight: '900' },
 
-  // Numpad Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '85%', maxWidth: 400, backgroundColor: '#F3F4F6', borderRadius: 25, padding: 20, alignItems: 'center', borderWidth: 4, borderColor: '#60A5FA' },
-  closeBtn: { position: 'absolute', top: 10, right: 15 },
-  questionText: { fontSize: 22, fontWeight: 'bold', color: '#374151', marginBottom: 15 },
-  mathBox: { flexDirection: 'row', alignItems: 'center', marginBottom: 25 },
-  mathText: { fontSize: 45, fontWeight: '900', color: '#1F2937' },
-  answerBox: { width: 80, height: 60, backgroundColor: 'white', borderRadius: 15, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#3B82F6' },
-  answerText: { fontSize: 40, fontWeight: 'bold', color: '#2563EB' },
-  numpadContainer: { width: '100%' },
-  numpadRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  numpadBtn: { width: '31%', aspectRatio: 1.2, backgroundColor: 'white', borderRadius: 15, justifyContent: 'center', alignItems: 'center', elevation: 3 },
-  numpadText: { fontSize: 30, fontWeight: 'bold', color: '#1F2937' },
+  // Styles Game Chung
+  gameContainer: { flex: 1, backgroundColor: '#F3F4F6' },
+  backBtn: { position: 'absolute', top: 20, left: 20, zIndex: 99 },
 
-  // Sticker Book Modal
-  stickerBookContainer: { flex: 1, backgroundColor: '#FFFBEB' },
-  stickerHeader: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#FDE047', borderBottomWidth: 3, borderBottomColor: '#FACC15', position: 'relative' },
-  stickerTitle: { fontSize: 26, fontWeight: '900', color: '#B45309' },
-  closeStickerBtn: { position: 'absolute', right: 20 },
-  stickerGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', padding: 15 },
-  stickerItem: { width: 140, height: 160, backgroundColor: 'white', margin: 10, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#FCD34D', elevation: 4 },
-  stickerLocked: { backgroundColor: '#F3F4F6', borderColor: '#D1D5DB' },
-  stickerImg: { width: 100, height: 100, borderRadius: 10, marginBottom: 10 },
-  stickerName: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', textTransform: 'capitalize' }
+  // Bong Bong Styles
+  problemBoard: { alignSelf: 'center', marginTop: 40, backgroundColor: 'white', paddingHorizontal: 40, paddingVertical: 20, borderRadius: 30, borderWidth: 5, borderColor: '#3B82F6', elevation: 8 },
+  problemText: { fontSize: 45, fontWeight: '900', color: '#1E3A8A' },
+  bubbleArea: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignContent: 'center', padding: 20 },
+  bubble: { width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', margin: 15, borderWidth: 4, borderColor: 'rgba(255,255,255,0.5)', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3 },
+  bubbleText: { fontSize: 40, fontWeight: '900', color: 'white' },
+
+  // Ech Xanh Styles
+  riverHeader: { alignSelf: 'center', marginTop: 40, backgroundColor: 'white', padding: 15, borderRadius: 20, borderWidth: 4, borderColor: '#059669' },
+  frogQuestion: { fontSize: 24, fontWeight: 'bold', color: '#065F46' },
+  frogEmoji: { fontSize: 100, alignSelf: 'center', marginTop: 30, zIndex: 10 },
+  riverBottom: { flex: 1, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', paddingBottom: 50 },
+  lilyPad: { alignItems: 'center' },
+  lilyEmoji: { fontSize: 80, marginBottom: -40 },
+  lilyPadText: { fontSize: 35, fontWeight: '900', color: 'white', zIndex: 2, textShadowColor: '#000', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 3 },
+
+  // Vua Khi Styles
+  monkeyArea: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 30 },
+  monkeyEmoji: { fontSize: 120 },
+  monkeyBelly: { backgroundColor: '#FCD34D', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, marginTop: -20, borderWidth: 3, borderColor: '#B45309' },
+  monkeyProblem: { fontSize: 35, fontWeight: '900', color: '#78350F' },
+  guideText: { fontSize: 16, color: '#92400E', marginTop: 10, fontWeight: 'bold', fontStyle: 'italic' },
+  bananaArea: { flexDirection: 'row', justifyContent: 'space-around', paddingBottom: 50 },
+  bananaWrapper: { alignItems: 'center', padding: 10 },
+  bananaEmoji: { fontSize: 70 },
+  bananaText: { fontSize: 30, fontWeight: '900', color: '#B45309', marginTop: -15, backgroundColor: 'white', borderRadius: 15, paddingHorizontal: 10, borderWidth: 2, borderColor: '#F59E0B' }
 });
