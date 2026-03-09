@@ -133,11 +133,13 @@ const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: 
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        Animated.spring(scale, { toValue: 1.2, useNativeDriver: true }).start();
+        // useNativeDriver: false để không bị crash khi chạm vào
+        Animated.spring(scale, { toValue: 1.2, useNativeDriver: false }).start();
       },
       onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
       onPanResponderRelease: (e, gesture) => {
-        Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
+        Animated.spring(scale, { toValue: 1, useNativeDriver: false }).start();
+        
         // Kéo thả lên trên (hướng về phía cái cân)
         if (gesture.dy < -60) {
           onDrop(item);
@@ -148,6 +150,14 @@ const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: 
       }
     })
   ).current;
+
+  // Dọn dẹp listener khi component bị gỡ bỏ, chống văng app
+  useEffect(() => {
+    return () => {
+      pan.removeAllListeners();
+      scale.removeAllListeners();
+    };
+  }, []);
 
   return (
     <Animated.View style={[{ transform: [...pan.getTranslateTransform(), { scale }] }]} {...panResponder.panHandlers}>
@@ -166,8 +176,8 @@ const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: 
           backgroundColor: item.color.bg, 
           borderColor: item.color.border,
           transform: [{ rotate: item.rot }],
-          marginLeft: item.marginLeft,
-          marginTop: item.marginTop
+          marginLeft: item.marginLeft, // Lệch trái phải
+          marginTop: item.marginTop    // Lệch lên xuống
         }]}>
           <Text style={styles.block3DText}>{item.val}</Text>
         </View>
@@ -211,9 +221,10 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
       const color = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
       blocks.push({
         id: `b${i}`, val: val, color,
-        rot: `${Math.floor(Math.random() * 60 - 30)}deg`,
-        marginLeft: Math.floor(Math.random() * 15 - 7), 
-        marginTop: Math.floor(Math.random() * 15 - 7),  
+        // Tèo quậy tung chảo chỗ này: Tăng góc xoay và độ lệch margin để tụi nó lộn xộn
+        rot: `${Math.floor(Math.random() * 80 - 40)}deg`, 
+        marginLeft: Math.floor(Math.random() * 26 - 13), 
+        marginTop: Math.floor(Math.random() * 26 - 13),  
       });
     }
     
@@ -234,6 +245,8 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
   const winScaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
+
     let targetTilt = 0;
     if (leftWeight > rightWeight) targetTilt = -15; 
     else if (rightWeight > leftWeight) targetTilt = 15; 
@@ -248,13 +261,17 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
         Animated.spring(winScaleAnim, { toValue: 1, friction: 2, useNativeDriver: true })
       ]).start();
 
-      setTimeout(() => {
+      timeout = setTimeout(() => {
         setAnimalPlaced(false);
         setPlacedBlocks([]);
         setIsVictory(false);
         setGameState(initGame());
       }, 3000);
     }
+
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
   }, [leftWeight, rightWeight]);
 
   const handleDropAnimal = () => setAnimalPlaced(true);
@@ -335,7 +352,7 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
                       backgroundColor: b.color.bg, 
                       borderColor: b.color.border,
                       transform: [{ rotate: b.rot }],
-                      margin: -3 
+                      margin: -5 // Ép dính vào nhau cho đỡ rớt ra ngoài đĩa cân
                     }]}>
                       <Text style={styles.block3DText}>{b.val}</Text>
                     </View>
@@ -359,6 +376,7 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
             {!animalPlaced && <DraggableItem item={gameState.animal} onDrop={handleDropAnimal} isAnimal={true} />}
           </View>
 
+          {/* Hàng chờ lộn xộn nát bét của Tèo */}
           <View style={styles.blockInventory}>
             {gameState.blocks.map(b => (
               <DraggableItem key={b.id} item={b} onDrop={handleDropBlock} isAnimal={false} />
@@ -465,12 +483,11 @@ const styles = StyleSheet.create({
   panRopeLeft: { position: 'absolute', width: 2, height: 80, backgroundColor: '#4B5563', left: 10, top: 0, transform: [{ rotate: '20deg' }] },
   panRopeRight: { position: 'absolute', width: 2, height: 80, backgroundColor: '#4B5563', right: 10, top: 0, transform: [{ rotate: '-20deg' }] },
   
-  // Tách khối vuông và thú khỏi Flexbox của mặt đĩa cân, thả trôi nổi bằng absolute để không bị ép nhỏ lại
   blocksOnPan: { 
     position: 'absolute', 
     bottom: 20, 
     flexDirection: 'row', 
-    flexWrap: 'wrap-reverse', // Xếp từ dưới lên
+    flexWrap: 'wrap-reverse', 
     justifyContent: 'center', 
     alignItems: 'center', 
     width: 140, 
@@ -488,7 +505,18 @@ const styles = StyleSheet.create({
   instructionText: { textAlign: 'center', fontSize: 16, fontWeight: 'bold', color: '#0369A1', marginBottom: 10 },
   inventoryArea: { flex: 1, flexDirection: 'row' },
   animalInventory: { width: '30%', justifyContent: 'center', alignItems: 'center', borderRightWidth: 3, borderRightColor: '#7DD3FC' },
-  blockInventory: { width: '70%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignContent: 'center' },
+  
+  // Hàng chờ được tinh chỉnh để xếp lộn xộn nhiều hàng
+  // Thay thế blockInventory cũ bằng cái này:
+  blockInventory: { 
+    width: 280, // Tèo bóp nghẹt chiều rộng lại nè
+    alignSelf: 'center', // Canh giữa khu vực
+    flexDirection: 'row', 
+    flexWrap: 'wrap', // Hết chỗ là tự động rớt xuống hàng
+    justifyContent: 'center', 
+    alignContent: 'center',
+    paddingTop: 10, 
+  },
   
   dragAnimalBox: { alignItems: 'center', paddingBottom: 20 },
   
