@@ -24,6 +24,7 @@ const getFiles = (dirPath, extensions) => {
 
 const imageExts = ['.png', '.jpg', '.jpeg'];
 const videoExts = ['.mp4', '.mov', '.avi'];
+const lottieExts = ['.json']; // Thêm đuôi json cho hoạt hình
 
 console.log('🚀 TÈO ĐANG KHỞI ĐỘNG CỖ MÁY DỌN KHO "ALL-IN-ONE"...');
 
@@ -59,10 +60,14 @@ const mappings = [
     src: path.join(tramDir, 'videos', 'can_co_gan'),
     dest: path.join(assetsDir, 'videos', 'can_co_gan')
   },
-  // THÊM BĂNG CHUYỀN MỚI CHO RẠP XIẾC ĐỘNG VẬT NÈ ĐẠI CA!
   {
     src: path.join(tramDir, 'game_cho_vat_an'),
     dest: path.join(assetsDir, 'game_cho_vat_an')
+  },
+  // BĂNG CHUYỀN MỚI CHO THÚ NHÚN LOTTIE (GAME BẬP BÊNH)
+  {
+    src: path.join(tramDir, 'lottie_animals'),
+    dest: path.join(assetsDir, 'lottie')
   }
 ];
 
@@ -88,11 +93,7 @@ mappings.forEach(map => {
         let destPath = path.join(map.dest, finalName);
         
         if (fs.existsSync(destPath)) {
-          // Gọt số nếu có để đè đồ mới cho gọn, không thêm số lằng nhằng nữa
-          // finalName = `${baseName}_${Date.now()}${finalExt}`; 
-          // destPath = path.join(map.dest, finalName);
-          
-          // Chơi bài xóa cũ đè mới cho thư mục động vật sạch sẽ
+          // Xóa cũ đè mới cho sạch sẽ
           fs.unlinkSync(destPath); 
         }
         
@@ -157,58 +158,48 @@ const makeKhoVideoContent = () => {
 fs.writeFileSync(path.join(constantsDir, 'kho_video.ts'), makeKhoVideoContent(), 'utf8');
 console.log(`✅ Sổ Video Toán: Cập nhật thành công!`);
 
-// 4. XỬ LÝ KHO ĐỘNG VẬT CHO RẠP XIẾC (TÍNH NĂNG MỚI NÈ ĐẠI CA)
+// 4. XỬ LÝ KHO ĐỘNG VẬT CHO RẠP XIẾC
 const dongVatAssetDir = path.join(assetsDir, 'game_cho_vat_an');
 ensureDir(dongVatAssetDir);
 const dongVatFiles = fs.readdirSync(dongVatAssetDir);
-
 const animalGroups = {};
 dongVatFiles.forEach(file => {
   const filePath = path.join(dongVatAssetDir, file);
   if (fs.statSync(filePath).isFile()) {
      const ext = path.extname(file).toLowerCase();
      const baseName = path.basename(file, ext);
-     
-     // Mò tìm id của con vật (ví dụ: tho_an -> id là tho)
      let id = baseName;
      let type = 'image'; 
-     if (baseName.endsWith('_an')) {
-        id = baseName.replace('_an', '');
-        type = 'videoAn';
-     } else if (baseName.endsWith('_khoc')) {
-        id = baseName.replace('_khoc', '');
-        type = 'videoKhoc';
-     }
-
-     if (!animalGroups[id]) {
-        animalGroups[id] = {};
-     }
+     if (baseName.endsWith('_an')) { id = baseName.replace('_an', ''); type = 'videoAn'; } 
+     else if (baseName.endsWith('_khoc')) { id = baseName.replace('_khoc', ''); type = 'videoKhoc'; }
+     if (!animalGroups[id]) animalGroups[id] = {};
      animalGroups[id][type] = file;
   }
 });
 
 let khoDongVatContent = `// File này Tèo code tự động.\n// Đại ca quăng ảnh/video vào tram_nhap_hang/game_cho_vat_an rồi chạy Tool nha!\n\nexport const KHO_DONG_VAT = [\n`;
 let validCount = 0;
-
 Object.keys(animalGroups).forEach(id => {
    const group = animalGroups[id];
-   // Chỉ con nào đủ 3 món ăn chơi (ảnh tĩnh, video ăn, video khóc) mới được lên tivi
    if (group.image && group.videoAn && group.videoKhoc) {
-      khoDongVatContent += `  {\n`;
-      khoDongVatContent += `    id: '${id}',\n`;
-      khoDongVatContent += `    name: '${id}',\n`;
-      khoDongVatContent += `    image: require('../assets/game_cho_vat_an/${group.image}'),\n`;
-      khoDongVatContent += `    videoAn: require('../assets/game_cho_vat_an/${group.videoAn}'),\n`;
-      khoDongVatContent += `    videoKhoc: require('../assets/game_cho_vat_an/${group.videoKhoc}')\n`;
-      khoDongVatContent += `  },\n`;
+      khoDongVatContent += `  {\n    id: '${id}',\n    name: '${id}',\n    image: require('../assets/game_cho_vat_an/${group.image}'),\n    videoAn: require('../assets/game_cho_vat_an/${group.videoAn}'),\n    videoKhoc: require('../assets/game_cho_vat_an/${group.videoKhoc}')\n  },\n`;
       validCount++;
-   } else {
-      console.log(`⚠️ CẢNH BÁO: Động vật '${id}' bị thiếu file (cần đủ 1 ảnh, 1 video _an, 1 video _khoc). Tèo tạm giam chưa cho lên sóng!`);
    }
 });
 khoDongVatContent += `];\n`;
-
 fs.writeFileSync(path.join(constantsDir, 'kho_dong_vat.ts'), khoDongVatContent, 'utf8');
 console.log(`✅ Sổ Động Vật : Đã ghép thành công ${validCount} con vật vào rạp xiếc!`);
+
+// 5. XỬ LÝ KHO LOTTIE CHO GAME BẬP BÊNH (MỚI NÈ ĐẠI CA)
+const lottieAssetDir = path.join(assetsDir, 'lottie');
+ensureDir(lottieAssetDir);
+const lottieFiles = getFiles(lottieAssetDir, lottieExts);
+let khoLottieContent = `// File này Tèo code tự động.\n// Đại ca tải file .json (hoạt hình Lottie) ném vào tram_nhap_hang/lottie_animals rồi chạy Tool nha!\n\nexport const LOTTIE_ANIMALS = [\n`;
+lottieFiles.forEach(file => {
+  khoLottieContent += `  require('../assets/lottie/${file}'),\n`;
+});
+khoLottieContent += `];\n`;
+fs.writeFileSync(path.join(constantsDir, 'kho_lottie.ts'), khoLottieContent, 'utf8');
+console.log(`✅ Sổ Lottie   : Ghi nhận ${lottieFiles.length} thú nhún 3D!`);
 
 console.log('🎉 XONG RỒI ĐẠI CA ƠI! HỆ THỐNG VẬN HÀNH TRƠN TRU!');

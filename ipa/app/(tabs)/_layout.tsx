@@ -59,11 +59,13 @@ export default function TabLayout() {
       />
 
       {/* 5. TAB LẬT HÌNH (RẠP XIẾC MỚI CỦA TÈO) */}
-      <Tabs.Screen
+   <Tabs.Screen
         name="lathinh"
         options={{
-          title: 'Lật Hình',
-          tabBarIcon: ({ color }) => <Ionicons name="cube" size={28} color={color} />,
+          title: 'Trò Chơi', 
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="game-controller" size={28} color={color} /> 
+          ),
         }}
       />
 
