@@ -133,25 +133,21 @@ const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: 
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        // useNativeDriver: false để không bị crash khi chạm vào
         Animated.spring(scale, { toValue: 1.2, useNativeDriver: false }).start();
       },
       onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
       onPanResponderRelease: (e, gesture) => {
         Animated.spring(scale, { toValue: 1, useNativeDriver: false }).start();
         
-        // Kéo thả lên trên (hướng về phía cái cân)
         if (gesture.dy < -60) {
           onDrop(item);
         } else {
-          // Trượt tay thì bay về rổ
           Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
         }
       }
     })
   ).current;
 
-  // Dọn dẹp listener khi component bị gỡ bỏ, chống văng app
   useEffect(() => {
     return () => {
       pan.removeAllListeners();
@@ -176,8 +172,9 @@ const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: 
           backgroundColor: item.color.bg, 
           borderColor: item.color.border,
           transform: [{ rotate: item.rot }],
-          marginLeft: item.marginLeft, // Lệch trái phải
-          marginTop: item.marginTop    // Lệch lên xuống
+          // Xóa lệnh lệch âm để không đè lên nhau, chỉ lệch dương nhẹ xíu xiu
+          marginLeft: item.marginLeft, 
+          marginTop: item.marginTop    
         }]}>
           <Text style={styles.block3DText}>{item.val}</Text>
         </View>
@@ -202,7 +199,6 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
     const targetLimit = maxLimit > 20 ? 20 : Math.max(maxLimit, 5);
     const target = Math.floor(Math.random() * (targetLimit - 4)) + 5; 
     
-    // Bốc thăm 1 bé Lottie từ sổ tự động
     const selectedLottie = LOTTIE_ANIMALS && LOTTIE_ANIMALS.length > 0 
       ? LOTTIE_ANIMALS[Math.floor(Math.random() * LOTTIE_ANIMALS.length)] 
       : null;
@@ -213,7 +209,6 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
     
     for(let i = 1; i <= 9; i++) {
       let val = i;
-      // Tránh việc khối vuông bằng số thú (ép bé phải làm phép cộng ít nhất 2 khối)
       if (val >= target) {
         val = Math.floor(Math.random() * (target - 1)) + 1;
       }
@@ -221,10 +216,10 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
       const color = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
       blocks.push({
         id: `b${i}`, val: val, color,
-        // Tèo quậy tung chảo chỗ này: Tăng góc xoay và độ lệch margin để tụi nó lộn xộn
-        rot: `${Math.floor(Math.random() * 80 - 40)}deg`, 
-        marginLeft: Math.floor(Math.random() * 26 - 13), 
-        marginTop: Math.floor(Math.random() * 26 - 13),  
+        // Giảm góc xoay và chỉ cho lệch dương cực nhỏ để tách bạch ra, chống cắn lộn
+        rot: `${Math.floor(Math.random() * 40 - 20)}deg`, 
+        marginLeft: Math.floor(Math.random() * 5), 
+        marginTop: Math.floor(Math.random() * 5),  
       });
     }
     
@@ -291,7 +286,6 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
     outputRange: ['-20deg', '20deg']
   });
 
-  // Báo lỗi nếu chưa nạp file JSON
   if (!gameState.animal.lottieAnim) {
     return (
       <View style={[styles.gameContainer, { backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center' }]}>
@@ -322,7 +316,6 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
         
         <Animated.View style={[styles.seesawBoard, { transform: [{ rotate: rotateInterpolate }, { scale: winScaleAnim }] }]}>
           
-          {/* Đĩa cân trái (Động vật) */}
           <View style={styles.panContainerLeft}>
             <View style={styles.pan}>
               {animalPlaced && (
@@ -341,18 +334,16 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
             <View style={styles.panRopeRight} />
           </View>
 
-          {/* Đĩa cân phải (Hình khối) */}
           <View style={styles.panContainerRight}>
             <View style={styles.pan}>
               <View style={styles.blocksOnPan}>
                 {placedBlocks.map(b => (
                   <TouchableOpacity key={b.id} activeOpacity={0.7} onPress={() => handleRemoveBlock(b)}>
-                    {/* Các khối nằm đè lên nhau sinh động */}
                     <View style={[styles.block3D, { 
                       backgroundColor: b.color.bg, 
                       borderColor: b.color.border,
                       transform: [{ rotate: b.rot }],
-                      margin: -5 // Ép dính vào nhau cho đỡ rớt ra ngoài đĩa cân
+                      margin: 2 // Đổi thành số dương để trên đĩa cân cũng dãn ra, không bị đè nút bấm
                     }]}>
                       <Text style={styles.block3DText}>{b.val}</Text>
                     </View>
@@ -376,12 +367,14 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
             {!animalPlaced && <DraggableItem item={gameState.animal} onDrop={handleDropAnimal} isAnimal={true} />}
           </View>
 
-          {/* Hàng chờ lộn xộn nát bét của Tèo */}
-          <View style={styles.blockInventory}>
-            {gameState.blocks.map(b => (
-              <DraggableItem key={b.id} item={b} onDrop={handleDropBlock} isAnimal={false} />
-            ))}
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <View style={styles.blockInventory}>
+              {gameState.blocks.map(b => (
+                <DraggableItem key={b.id} item={b} onDrop={handleDropBlock} isAnimal={false} />
+              ))}
+            </View>
           </View>
+
         </View>
       </View>
     </View>
@@ -410,7 +403,6 @@ export default function TroChoiHubScreen() {
     }, [])
   );
 
-  // Bộ định tuyến
   if (currentGame === 'cho_an') return <ChoDongVatAnGame maxLimit={maxLimit} onBack={() => setCurrentGame('menu')} />;
   if (currentGame === 'bap_benh') return <BapBenhGame maxLimit={maxLimit} onBack={() => setCurrentGame('menu')} />;
 
@@ -461,7 +453,6 @@ const styles = StyleSheet.create({
   gameContainer: { flex: 1, overflow: 'hidden' },
   backBtn: { position: 'absolute', top: 20, left: 20, zIndex: 99, backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 30 },
 
-  // Game 1 Styles
   animalScreen: { width: '100%', aspectRatio: 16/9, backgroundColor: '#000', borderBottomWidth: 5, borderBottomColor: '#B45309', elevation: 10 },
   animalMedia: { width: '100%', height: '100%' },
   problemBoard: { alignSelf: 'center', marginTop: 40, backgroundColor: 'white', paddingHorizontal: 50, paddingVertical: 20, borderRadius: 30, borderWidth: 5, borderColor: '#3B82F6', elevation: 8 },
@@ -471,7 +462,6 @@ const styles = StyleSheet.create({
   foodEmoji: { fontSize: 80 },
   foodText: { fontSize: 40, fontWeight: '900', color: '#B45309', marginTop: -20, backgroundColor: 'white', borderRadius: 20, paddingHorizontal: 20, borderWidth: 4, borderColor: '#F59E0B', elevation: 5 },
 
-  // Game 2 Styles
   winTextHoanHo: { position: 'absolute', top: 80, alignSelf: 'center', fontSize: 35, fontWeight: '900', color: '#EF4444', textShadowColor: 'white', textShadowOffset: { width: 2, height: 2 }, textShadowRadius: 5, zIndex: 50 },
   seesawArea: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 },
   fulcrum: { position: 'absolute', bottom: '25%', borderBottomWidth: 60, borderBottomColor: '#B45309', borderLeftWidth: 30, borderLeftColor: 'transparent', borderRightWidth: 30, borderRightColor: 'transparent', zIndex: 2 },
@@ -506,16 +496,15 @@ const styles = StyleSheet.create({
   inventoryArea: { flex: 1, flexDirection: 'row' },
   animalInventory: { width: '30%', justifyContent: 'center', alignItems: 'center', borderRightWidth: 3, borderRightColor: '#7DD3FC' },
   
-  // Hàng chờ được tinh chỉnh để xếp lộn xộn nhiều hàng
-  // Thay thế blockInventory cũ bằng cái này:
   blockInventory: { 
-    width: 280, // Tèo bóp nghẹt chiều rộng lại nè
-    alignSelf: 'center', // Canh giữa khu vực
+    width: 320, // Rộng rãi ra tí cho tụi nó bung lụa
+    alignSelf: 'center',
     flexDirection: 'row', 
-    flexWrap: 'wrap', // Hết chỗ là tự động rớt xuống hàng
+    flexWrap: 'wrap', 
     justifyContent: 'center', 
     alignContent: 'center',
     paddingTop: 10, 
+    gap: 12, // Tèo thêm gap vào đây để chia ranh giới rõ ràng, đố em nào cắn nhầm
   },
   
   dragAnimalBox: { alignItems: 'center', paddingBottom: 20 },
@@ -529,7 +518,6 @@ const styles = StyleSheet.create({
     borderRadius: 8, 
     borderBottomWidth: 5, borderRightWidth: 3, borderTopWidth: 1, borderLeftWidth: 1, 
     justifyContent: 'center', alignItems: 'center', 
-    margin: 5, 
     elevation: 4 
   },
   block3DText: { fontSize: 24, fontWeight: '900', color: 'white', textShadowColor: 'black', textShadowOffset: {width: 1, height: 1}, textShadowRadius: 2 }
