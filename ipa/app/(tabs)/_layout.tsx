@@ -52,7 +52,7 @@ export default function TabLayout() {
 
       {/* 5. TAB TRÒ CHƠI */}
       <Tabs.Screen
-        name="lathinh"
+        name="trochoi"
         options={{
           title: 'Trò Chơi', // Đổi tên thành Trò Chơi
           tabBarIcon: ({ color }) => <Ionicons name="game-controller" size={28} color={color} />, // Đổi icon thành tay cầm chơi game
