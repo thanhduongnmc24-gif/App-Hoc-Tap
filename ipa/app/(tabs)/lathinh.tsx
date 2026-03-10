@@ -4,7 +4,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { supabase } from '../../utils/supabaseConfig';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode, Audio } from 'expo-av';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import LottieView from 'lottie-react-native';
 
@@ -172,7 +172,6 @@ const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: 
           backgroundColor: item.color.bg, 
           borderColor: item.color.border,
           transform: [{ rotate: item.rot }],
-          // Xóa lệnh lệch âm để không đè lên nhau, chỉ lệch dương nhẹ xíu xiu
           marginLeft: item.marginLeft, 
           marginTop: item.marginTop    
         }]}>
@@ -216,7 +215,6 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
       const color = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
       blocks.push({
         id: `b${i}`, val: val, color,
-        // Giảm góc xoay và chỉ cho lệch dương cực nhỏ để tách bạch ra, chống cắn lộn
         rot: `${Math.floor(Math.random() * 40 - 20)}deg`, 
         marginLeft: Math.floor(Math.random() * 5), 
         marginTop: Math.floor(Math.random() * 5),  
@@ -309,7 +307,6 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
 
       {isVictory && <Text style={styles.winTextHoanHo}>HOAN HÔ! CÂN BẰNG RỒI! 🎉</Text>}
 
-      {/* KHU VỰC BẬP BÊNH VẬT LÝ */}
       <View style={styles.seesawArea}>
         <View style={styles.fulcrumBase} />
         <View style={styles.fulcrum} />
@@ -343,7 +340,7 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
                       backgroundColor: b.color.bg, 
                       borderColor: b.color.border,
                       transform: [{ rotate: b.rot }],
-                      margin: 2 // Đổi thành số dương để trên đĩa cân cũng dãn ra, không bị đè nút bấm
+                      margin: 2 
                     }]}>
                       <Text style={styles.block3DText}>{b.val}</Text>
                     </View>
@@ -358,7 +355,6 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
         </Animated.View>
       </View>
 
-      {/* BẢNG ĐIỀU KHIỂN BÊN DƯỚI */}
       <View style={styles.controlPanel}>
         <Text style={styles.instructionText}>(Bé đưa thú lên cân, lỡ ném sai khối thì chạm vào khối trên cân để lấy lại nha!)</Text>
         <View style={styles.inventoryArea}>
@@ -382,13 +378,231 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
 };
 
 // ==========================================
+// GAME 3: ĐẬP THÚ NHÚN (WHACK-A-MOLE) VỚI CẤP ĐỘ KHÓ 🐹🔨
+// ==========================================
+const HOLE_COUNT = 9;
+const MOLE_EMOJIS = ['🐹', '🐱', '🐶', '🐰', '🐼']; 
+const MAX_MISSES = 5; // Tối đa 5 lần trượt
+
+const DapThuGame = ({ onBack }: { onBack: () => void }) => {
+  const [score, setScore] = useState(0);
+  const [misses, setMisses] = useState(0);
+  const [gameOver, setGameOver] = useState(false);
+  const [activeHole, setActiveHole] = useState<number | null>(null);
+  const [activeEmoji, setActiveEmoji] = useState('🐹');
+  const [hitEffect, setHitEffect] = useState<{ id: number, x: number, y: number } | null>(null);
+  
+  const [hammerPos, setHammerPos] = useState<{x: number, y: number} | null>(null);
+  const hammerAnim = useRef(new Animated.Value(0)).current;
+
+  // Sử dụng Refs để quản lý vòng lặp thời gian mượt mà, không bị xung đột State
+  const scoreRef = useRef(0);
+  const missesRef = useRef(0);
+  const gameOverRef = useRef(false);
+  const activeHoleRef = useRef<number | null>(null);
+  const gameLoopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startGame = useCallback(() => {
+    // Reset toàn bộ thông số
+    setScore(0); setMisses(0); setGameOver(false);
+    scoreRef.current = 0; missesRef.current = 0; gameOverRef.current = false;
+    activeHoleRef.current = null;
+    
+    runGameLoop();
+  }, []);
+
+  const runGameLoop = () => {
+    if (gameOverRef.current) return;
+    
+    const currentScore = scoreRef.current;
+    
+    // THUẬT TOÁN TĂNG ĐỘ KHÓ: Điểm càng cao thời gian càng rút ngắn
+    // Ban đầu nằm chơi 1000ms, sau đó cứ mỗi điểm trừ 40ms, nhanh nhất là 350ms (chớp nhoáng)
+    const stayTime = Math.max(350, 1500 - currentScore * 30); 
+    // Thời gian nghỉ giữa các lần ngoi lên: Ban đầu 500ms, rút dần xuống 150ms
+    const waitTime = Math.max(150, 500 - currentScore * 15); 
+    
+    // Gọi con vật lên
+    const randomHole = Math.floor(Math.random() * HOLE_COUNT);
+    setActiveHole(randomHole);
+    activeHoleRef.current = randomHole;
+    setActiveEmoji(MOLE_EMOJIS[Math.floor(Math.random() * MOLE_EMOJIS.length)]);
+
+    // Cài đồng hồ đếm ngược lúc con vật thụt xuống
+    gameLoopRef.current = setTimeout(() => {
+        // Nếu đồng hồ hết hạn mà con vật vẫn còn trên miệng lỗ (nghĩa là bé chưa kịp đập)
+        if (activeHoleRef.current !== null) {
+            setActiveHole(null);
+            activeHoleRef.current = null;
+            
+            // Phạt trừ 1 tim
+            missesRef.current += 1;
+            setMisses(missesRef.current);
+            
+            // Kiểm tra xem đã toi mạng chưa
+            if (missesRef.current >= MAX_MISSES) {
+                gameOverRef.current = true;
+                setGameOver(true);
+                return; // Dừng vòng lặp game
+            }
+        }
+        
+        // Nghỉ một tí rồi tiếp tục ngoi con khác lên
+        gameLoopRef.current = setTimeout(runGameLoop, waitTime);
+    }, stayTime);
+  };
+
+  useEffect(() => {
+    startGame(); // Khởi động ngay khi vào game
+    return () => {
+      if (gameLoopRef.current) clearTimeout(gameLoopRef.current);
+    };
+  }, [startGame]);
+
+  const playBonkSound = async () => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: 'https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg' }
+      );
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
+      });
+    } catch (error) {
+      console.log("Không phát được tiếng búa:", error);
+    }
+  };
+
+  const handleWhack = (index: number, event: any) => {
+    if (gameOverRef.current) return;
+    
+    const { pageX, pageY } = event.nativeEvent;
+
+    setHammerPos({ x: pageX, y: pageY });
+    hammerAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(hammerAnim, { toValue: 1, duration: 80, useNativeDriver: true }), 
+      Animated.timing(hammerAnim, { toValue: 0, duration: 150, delay: 50, useNativeDriver: true })
+    ]).start(() => setHammerPos(null));
+
+    // Nếu búa gõ trúng đầu thú
+    if (index === activeHoleRef.current) {
+      playBonkSound(); 
+      
+      // Xóa bộ đếm giờ cũ đi để nó không trừ tim oan
+      if (gameLoopRef.current) clearTimeout(gameLoopRef.current);
+      
+      setActiveHole(null); 
+      activeHoleRef.current = null;
+      
+      scoreRef.current += 1;
+      setScore(scoreRef.current);
+      setHitEffect({ id: Date.now(), x: pageX, y: pageY }); 
+      
+      // Khởi động lại vòng lặp ngay lập tức cho máu
+      const waitTime = Math.max(150, 500 - scoreRef.current * 15);
+      gameLoopRef.current = setTimeout(runGameLoop, waitTime);
+    }
+  };
+
+  const hammerRotate = hammerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['45deg', '-45deg']
+  });
+
+  return (
+    <View style={[styles.gameContainer, { backgroundColor: '#D1FAE5' }]}>
+      
+      {hitEffect && (
+        <ConfettiCannon 
+          key={hitEffect.id} count={30} origin={{ x: hitEffect.x, y: hitEffect.y }} 
+          fallSpeed={2000} explosionSpeed={300} fadeOut
+        />
+      )}
+
+      {/* CÂY BÚA */}
+      {hammerPos && (
+        <Animated.Text
+          style={{
+            position: 'absolute',
+            left: hammerPos.x - 30, top: hammerPos.y - 100, fontSize: 90, zIndex: 9999, 
+            transform: [{ rotate: hammerRotate }],
+            textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 3, height: 3 }, textShadowRadius: 5
+          }}
+        >
+          🔨
+        </Animated.Text>
+      )}
+
+      <View style={styles.whackHeader}>
+        <TouchableOpacity style={styles.whackBackBtn} onPress={onBack}>
+          <Ionicons name="arrow-back-circle" size={50} color="#047857" />
+        </TouchableOpacity>
+        
+        {/* BẢNG ĐIỂM VÀ THANH MÁU */}
+        <View style={styles.scoreBoardTop}>
+          <View style={styles.scoreBoard}>
+            <Text style={styles.scoreText}>Điểm: {score}</Text>
+          </View>
+          <View style={styles.healthBar}>
+            {/* Hiển thị số tim còn lại */}
+            {Array.from({ length: MAX_MISSES - misses }).map((_, i) => (
+              <Text key={`heart-${i}`} style={styles.heartIcon}>❤️</Text>
+            ))}
+            {/* Hiển thị số tim đã mất (trái tim đen) */}
+            {Array.from({ length: misses }).map((_, i) => (
+              <Text key={`lost-${i}`} style={styles.heartIcon}>🖤</Text>
+            ))}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.whackGrid}>
+        {Array.from({ length: HOLE_COUNT }).map((_, index) => (
+          <TouchableOpacity 
+            key={index} activeOpacity={1} style={styles.holeContainer} 
+            onPress={(e) => handleWhack(index, e)}
+          >
+            <View style={styles.holeDirt} />
+            {activeHole === index && (
+              <Animated.View style={styles.moleWrapper}>
+                <Text style={styles.moleEmoji}>{activeEmoji}</Text>
+              </Animated.View>
+            )}
+            <View style={styles.holeFront} />
+          </TouchableOpacity>
+        ))}
+      </View>
+      
+      <Text style={styles.whackInstruction}>Đập Mèo xám và Chuột lang đang ngoi lên kìa!</Text>
+
+      {/* MÀN HÌNH GAME OVER */}
+      {gameOver && (
+        <View style={styles.gameOverOverlay}>
+          <View style={styles.gameOverBox}>
+            <Text style={styles.gameOverTitle}>BẠN ĐÃ THUA!</Text>
+            <Text style={styles.gameOverScore}>Điểm của bạn: {score}</Text>
+            <Text style={styles.gameOverMsg}>Bạn đã để lọt mất quá nhiều thú nhún!</Text>
+            
+            <TouchableOpacity style={styles.replayBtn} onPress={startGame}>
+              <Ionicons name="refresh-circle" size={40} color="white" />
+              <Text style={styles.replayBtnText}>Chơi Lại</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+};
+
+// ==========================================
 // MÀN HÌNH CHÍNH QUẢN LÝ CÁC TRÒ CHƠI
 // ==========================================
 export default function TroChoiHubScreen() {
   const { colors } = useTheme();
   const [maxLimit, setMaxLimit] = useState(10);
   
-  const [currentGame, setCurrentGame] = useState<'menu' | 'cho_an' | 'bap_benh' | 'game3'>('menu');
+  const [currentGame, setCurrentGame] = useState<'menu' | 'cho_an' | 'bap_benh' | 'dap_thu'>('menu');
 
   useFocusEffect(
     useCallback(() => {
@@ -405,6 +619,7 @@ export default function TroChoiHubScreen() {
 
   if (currentGame === 'cho_an') return <ChoDongVatAnGame maxLimit={maxLimit} onBack={() => setCurrentGame('menu')} />;
   if (currentGame === 'bap_benh') return <BapBenhGame maxLimit={maxLimit} onBack={() => setCurrentGame('menu')} />;
+  if (currentGame === 'dap_thu') return <DapThuGame onBack={() => setCurrentGame('menu')} />;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -429,11 +644,11 @@ export default function TroChoiHubScreen() {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.menuCard, { borderColor: '#9CA3AF', backgroundColor: '#F3F4F6', opacity: 0.7 }]} disabled>
-          <Text style={styles.menuIcon}>🚧</Text>
+        <TouchableOpacity style={[styles.menuCard, { borderColor: '#10B981', backgroundColor: '#ECFDF5' }]} onPress={() => setCurrentGame('dap_thu')}>
+          <Text style={styles.menuIcon}>🐹</Text>
           <View>
-            <Text style={[styles.menuTitle, { color: '#4B5563' }]}>Trò Chơi Số 3</Text>
-            <Text style={{ color: '#6B7280', fontSize: 16 }}>Đang xây dựng...</Text>
+            <Text style={[styles.menuTitle, { color: '#047857' }]}>Đập Thú Nhún</Text>
+            <Text style={{ color: '#059669', fontSize: 16 }}>Đập búa giải trí siêu tốc độ!</Text>
           </View>
         </TouchableOpacity>
       </View>
@@ -453,6 +668,7 @@ const styles = StyleSheet.create({
   gameContainer: { flex: 1, overflow: 'hidden' },
   backBtn: { position: 'absolute', top: 20, left: 20, zIndex: 99, backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 30 },
 
+  // Game 1 Styles
   animalScreen: { width: '100%', aspectRatio: 16/9, backgroundColor: '#000', borderBottomWidth: 5, borderBottomColor: '#B45309', elevation: 10 },
   animalMedia: { width: '100%', height: '100%' },
   problemBoard: { alignSelf: 'center', marginTop: 40, backgroundColor: 'white', paddingHorizontal: 50, paddingVertical: 20, borderRadius: 30, borderWidth: 5, borderColor: '#3B82F6', elevation: 8 },
@@ -462,6 +678,7 @@ const styles = StyleSheet.create({
   foodEmoji: { fontSize: 80 },
   foodText: { fontSize: 40, fontWeight: '900', color: '#B45309', marginTop: -20, backgroundColor: 'white', borderRadius: 20, paddingHorizontal: 20, borderWidth: 4, borderColor: '#F59E0B', elevation: 5 },
 
+  // Game 2 Styles
   winTextHoanHo: { position: 'absolute', top: 80, alignSelf: 'center', fontSize: 35, fontWeight: '900', color: '#EF4444', textShadowColor: 'white', textShadowOffset: { width: 2, height: 2 }, textShadowRadius: 5, zIndex: 50 },
   seesawArea: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 },
   fulcrum: { position: 'absolute', bottom: '25%', borderBottomWidth: 60, borderBottomColor: '#B45309', borderLeftWidth: 30, borderLeftColor: 'transparent', borderRightWidth: 30, borderRightColor: 'transparent', zIndex: 2 },
@@ -473,52 +690,49 @@ const styles = StyleSheet.create({
   panRopeLeft: { position: 'absolute', width: 2, height: 80, backgroundColor: '#4B5563', left: 10, top: 0, transform: [{ rotate: '20deg' }] },
   panRopeRight: { position: 'absolute', width: 2, height: 80, backgroundColor: '#4B5563', right: 10, top: 0, transform: [{ rotate: '-20deg' }] },
   
-  blocksOnPan: { 
-    position: 'absolute', 
-    bottom: 20, 
-    flexDirection: 'row', 
-    flexWrap: 'wrap-reverse', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    width: 140, 
-    zIndex: 10 
-  },
-  
-  animalOnPan: { 
-    position: 'absolute',
-    bottom: 20, 
-    alignItems: 'center', 
-    zIndex: 10
-  },
+  blocksOnPan: { position: 'absolute', bottom: 20, flexDirection: 'row', flexWrap: 'wrap-reverse', justifyContent: 'center', alignItems: 'center', width: 140, zIndex: 10 },
+  animalOnPan: { position: 'absolute', bottom: 20, alignItems: 'center', zIndex: 10 },
   
   controlPanel: { height: '35%', backgroundColor: '#BAE6FD', borderTopWidth: 5, borderTopColor: '#0284C7', padding: 10 },
   instructionText: { textAlign: 'center', fontSize: 16, fontWeight: 'bold', color: '#0369A1', marginBottom: 10 },
   inventoryArea: { flex: 1, flexDirection: 'row' },
   animalInventory: { width: '30%', justifyContent: 'center', alignItems: 'center', borderRightWidth: 3, borderRightColor: '#7DD3FC' },
-  
-  blockInventory: { 
-    width: 320, // Rộng rãi ra tí cho tụi nó bung lụa
-    alignSelf: 'center',
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    justifyContent: 'center', 
-    alignContent: 'center',
-    paddingTop: 10, 
-    gap: 12, // Tèo thêm gap vào đây để chia ranh giới rõ ràng, đố em nào cắn nhầm
-  },
+  blockInventory: { width: 320, alignSelf: 'center', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignContent: 'center', paddingTop: 10, gap: 12 },
   
   dragAnimalBox: { alignItems: 'center', paddingBottom: 20 },
-  
-  lottieAnimal: { width: 100, height: 100 }, 
+  lottieAnimal: { width: 150, height: 150 }, 
   animalBadge: { position: 'absolute', bottom: 15, backgroundColor: '#EF4444', borderRadius: 15, width: 30, height: 30, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'white' },
   animalBadgeText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 
-  block3D: { 
-    width: 50, height: 50, 
-    borderRadius: 8, 
-    borderBottomWidth: 5, borderRightWidth: 3, borderTopWidth: 1, borderLeftWidth: 1, 
-    justifyContent: 'center', alignItems: 'center', 
-    elevation: 4 
-  },
-  block3DText: { fontSize: 24, fontWeight: '900', color: 'white', textShadowColor: 'black', textShadowOffset: {width: 1, height: 1}, textShadowRadius: 2 }
+  block3D: { width: 50, height: 50, borderRadius: 8, borderBottomWidth: 5, borderRightWidth: 3, borderTopWidth: 1, borderLeftWidth: 1, justifyContent: 'center', alignItems: 'center', elevation: 4 },
+  block3DText: { fontSize: 24, fontWeight: '900', color: 'white', textShadowColor: 'black', textShadowOffset: {width: 1, height: 1}, textShadowRadius: 2 },
+
+  // Game 3 (Đập Thú Nhún) Styles
+  whackHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 30, marginBottom: 20 },
+  whackBackBtn: { position: 'absolute', left: 20, top: 0, zIndex: 10 },
+  
+  scoreBoardTop: { alignItems: 'center' },
+  scoreBoard: { backgroundColor: '#10B981', paddingHorizontal: 30, paddingVertical: 10, borderRadius: 25, borderWidth: 4, borderColor: '#047857', elevation: 5 },
+  scoreText: { fontSize: 30, fontWeight: '900', color: 'white' },
+  
+  healthBar: { flexDirection: 'row', marginTop: 10, backgroundColor: 'rgba(255,255,255,0.5)', paddingHorizontal: 15, paddingVertical: 5, borderRadius: 20 },
+  heartIcon: { fontSize: 24, marginHorizontal: 2 },
+  
+  whackGrid: { width: '100%', maxWidth: 500, alignSelf: 'center', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginTop: 10 },
+  holeContainer: { width: '30%', height: 120, margin: '1.5%', justifyContent: 'flex-end', alignItems: 'center', overflow: 'hidden' },
+  holeDirt: { position: 'absolute', bottom: 15, width: '80%', height: 40, backgroundColor: '#78350F', borderRadius: 40, zIndex: 1 },
+  holeFront: { position: 'absolute', bottom: 5, width: '90%', height: 30, backgroundColor: '#92400E', borderRadius: 40, zIndex: 3 },
+  moleWrapper: { zIndex: 2, paddingBottom: 20 },
+  moleEmoji: { fontSize: 80 },
+  whackInstruction: { textAlign: 'center', fontSize: 18, fontWeight: 'bold', color: '#047857', marginTop: 30, paddingHorizontal: 20 },
+
+  // Game Over Overlay
+  gameOverOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
+  gameOverBox: { backgroundColor: '#FEF3C7', padding: 40, borderRadius: 30, borderWidth: 8, borderColor: '#EF4444', alignItems: 'center', width: '80%', maxWidth: 400 },
+  gameOverTitle: { fontSize: 45, fontWeight: '900', color: '#DC2626', marginBottom: 10, textShadowColor: '#FCA5A5', textShadowOffset: {width: 2, height: 2}, textShadowRadius: 1 },
+  gameOverScore: { fontSize: 30, fontWeight: 'bold', color: '#B45309', marginBottom: 10 },
+  gameOverMsg: { fontSize: 18, color: '#78350F', textAlign: 'center', marginBottom: 30 },
+  replayBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B981', paddingHorizontal: 25, paddingVertical: 15, borderRadius: 20, borderWidth: 4, borderColor: '#047857', elevation: 5 },
+  replayBtnText: { fontSize: 24, fontWeight: '900', color: 'white', marginLeft: 10 }
+
 });

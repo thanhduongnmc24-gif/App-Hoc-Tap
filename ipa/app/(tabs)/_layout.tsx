@@ -31,7 +31,7 @@ export default function TabLayout() {
         }}
       />
 
-      {/* 2. TAB TIẾNG VIỆT */}
+      {/* 2. TAB TIẾNG VIỆT (TÈO ĐÃ NÂNG CẤP THÀNH SIÊU THỊ TIẾNG VIỆT) */}
       <Tabs.Screen
         name="tiengviet"
         options={{
@@ -40,32 +40,22 @@ export default function TabLayout() {
         }}
       />
 
-      {/* 3. TAB TẬP ĐỌC */}
+      {/* TÈO ĐÃ ẨN 2 TAB NÀY ĐI BẰNG LỆNH href: null (Đại ca có thể xóa luôn 2 file tapdoc.tsx và baitap.tsx) */}
       <Tabs.Screen
         name="tapdoc"
-        options={{
-          title: 'Tập Đọc',
-          tabBarIcon: ({ color }) => <Ionicons name="book" size={28} color={color} />,
-        }}
+        options={{ href: null }}
       />
-
-      {/* 4. TAB BÀI TẬP */}
       <Tabs.Screen
         name="baitap"
-        options={{
-          title: 'Bài Tập',
-          tabBarIcon: ({ color }) => <Ionicons name="pencil" size={28} color={color} />,
-        }}
+        options={{ href: null }}
       />
 
-      {/* 5. TAB LẬT HÌNH (RẠP XIẾC MỚI CỦA TÈO) */}
-   <Tabs.Screen
+      {/* 5. TAB LẬT HÌNH (RẠP XIẾC) */}
+      <Tabs.Screen
         name="lathinh"
         options={{
-          title: 'Trò Chơi', 
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="game-controller" size={28} color={color} /> 
-          ),
+          title: 'Rạp Xiếc',
+          tabBarIcon: ({ color }) => <Ionicons name="cube" size={28} color={color} />,
         }}
       />
 
