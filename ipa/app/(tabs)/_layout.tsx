@@ -40,7 +40,7 @@ export default function TabLayout() {
         }}
       />
 
-      {/* TÈO ĐÃ ẨN 2 TAB NÀY ĐI BẰNG LỆNH href: null (Đại ca có thể xóa luôn 2 file tapdoc.tsx và baitap.tsx) */}
+      {/* TÈO ĐÃ ẨN 2 TAB NÀY ĐI BẰNG LỆNH href: null */}
       <Tabs.Screen
         name="tapdoc"
         options={{ href: null }}
@@ -50,12 +50,12 @@ export default function TabLayout() {
         options={{ href: null }}
       />
 
-      {/* 5. TAB LẬT HÌNH (RẠP XIẾC) */}
+      {/* 5. TAB TRÒ CHƠI */}
       <Tabs.Screen
         name="lathinh"
         options={{
-          title: 'Rạp Xiếc',
-          tabBarIcon: ({ color }) => <Ionicons name="cube" size={28} color={color} />,
+          title: 'Trò Chơi', // Đổi tên thành Trò Chơi
+          tabBarIcon: ({ color }) => <Ionicons name="game-controller" size={28} color={color} />, // Đổi icon thành tay cầm chơi game
         }}
       />
 
