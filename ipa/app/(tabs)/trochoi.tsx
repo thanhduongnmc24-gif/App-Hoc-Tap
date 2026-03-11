@@ -235,11 +235,15 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
     const targetLimit = maxLimit > 20 ? 20 : Math.max(maxLimit, 5);
     const target = Math.floor(Math.random() * (targetLimit - 4)) + 5; 
     
+    // Tèo gắn thêm cái đồng hồ đếm ngược vào đây để tạo mã độc nhất cho mỗi màn chơi
+    const sessionKey = Date.now(); 
+
     const selectedLottie = LOTTIE_ANIMALS && LOTTIE_ANIMALS.length > 0 
       ? LOTTIE_ANIMALS[Math.floor(Math.random() * LOTTIE_ANIMALS.length)] 
       : null;
       
-    const animal = { id: 'a1', lottieAnim: selectedLottie, val: target };
+    // Gắn mác thời gian vào thú nhún
+    const animal = { id: `a1_${sessionKey}`, lottieAnim: selectedLottie, val: target };
     
     let blocks = [];
     
@@ -251,7 +255,9 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
 
       const color = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
       blocks.push({
-        id: `b${i}`, val: val, color,
+        // Gắn mác thời gian vào từng viên gạch để chống ma nhập
+        id: `b${i}_${sessionKey}`, 
+        val: val, color,
         rot: `${Math.floor(Math.random() * 40 - 20)}deg`, 
         marginLeft: Math.floor(Math.random() * 5), 
         marginTop: Math.floor(Math.random() * 5),  
