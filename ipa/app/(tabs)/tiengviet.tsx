@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { useFonts } from 'expo-font';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode, Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Import kho tập đọc
@@ -136,6 +136,9 @@ const GhepVanGame = ({ onBack }: { onBack: () => void }) => {
 // ==========================================
 // MODULE 2: BÉ TẬP ĐỌC
 // ==========================================
+// ==========================================
+// MODULE 2: BÉ TẬP ĐỌC (CÔ GOOGLE CHUẨN XỊN 100% 🔊)
+// ==========================================
 const TapDocGame = ({ onBack }: { onBack: () => void }) => {
   const { colors } = useTheme();
   const [childName, setChildName] = useState('Bé yêu');
@@ -167,6 +170,28 @@ const TapDocGame = ({ onBack }: { onBack: () => void }) => {
     setCurrentItem(selected);
   };
 
+  // Hàm mời chị Google xịn về đọc
+  const handleSpeak = async () => {
+    if (currentItem && currentItem.word) {
+      try {
+        // Tèo lấy chữ bé đang học, nhét vào link của Google Dịch để lấy đúng cái giọng chuẩn đó về
+        const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(currentItem.word)}&tl=vi&client=tw-ob`;
+        
+        const { sound } = await Audio.Sound.createAsync({ uri: url });
+        await sound.playAsync();
+        
+        // Hát xong là dọn dẹp bộ nhớ ngay cho nhẹ máy
+        sound.setOnPlaybackStatusUpdate((status: any) => {
+          if (status.isLoaded && status.didJustFinish) {
+            sound.unloadAsync();
+          }
+        });
+      } catch (error) {
+        console.log("Lỗi mời chị Google:", error);
+      }
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
       <View style={[styles.header, { backgroundColor: '#86EFAC', borderBottomColor: '#4ADE80' }]}>
@@ -188,9 +213,19 @@ const TapDocGame = ({ onBack }: { onBack: () => void }) => {
             <View style={[styles.td_imageCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Image source={currentItem.image} style={styles.td_imageSquare} resizeMode="cover" />
             </View>
-            <View style={styles.td_wordContainer}>
-              <Text style={[styles.td_wordText, { color: colors.text }]}>{currentItem.word}</Text>
+            
+            <View style={[styles.td_wordContainer, { flexDirection: 'row', alignItems: 'center' }]}>
+              <Text style={[styles.td_wordText, { color: colors.text, marginRight: 20 }]}>{currentItem.word}</Text>
+              
+              <TouchableOpacity 
+                style={{ backgroundColor: '#38BDF8', padding: 15, borderRadius: 50, elevation: 5, borderWidth: 3, borderColor: '#0284C7' }} 
+                onPress={handleSpeak}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="volume-high" size={45} color="white" />
+              </TouchableOpacity>
             </View>
+
             <TouchableOpacity style={styles.td_nextBtn} onPress={handleNextItem} activeOpacity={0.8}>
               <Text style={styles.td_nextBtnText}>Đổi Hình Khác 🎲</Text>
               <Ionicons name="arrow-forward-circle" size={32} color="white" style={{ marginLeft: 10 }} />

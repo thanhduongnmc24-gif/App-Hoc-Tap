@@ -125,23 +125,60 @@ const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () =
 // ==========================================
 // COMPONENT KÉO THẢ DÀNH CHO GAME 2
 // ==========================================
+// ==========================================
+// COMPONENT KÉO THẢ DÀNH CHO GAME 2 (CÓ ÂM THANH 🎵)
+// ==========================================
 const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: (i: any) => void, isAnimal?: boolean }) => {
   const pan = useRef(new Animated.ValueXY()).current;
   const scale = useRef(new Animated.Value(1)).current;
+
+  // Tiếng bốc lên (Pop)
+  const playPickSound = async () => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: 'https://actions.google.com/sounds/v1/cartoon/pop.ogg' } 
+      );
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
+      });
+    } catch (error) {
+      console.log("Lỗi tiếng bốc:", error);
+    }
+  };
+
+  // Tiếng thả xuống cân (Boing)
+  const playDropSound = async () => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: 'https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg' }
+      );
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
+      });
+    } catch (error) {
+      console.log("Lỗi tiếng thả:", error);
+    }
+  };
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        playPickSound(); // Chạm vào là kêu Pop!
         Animated.spring(scale, { toValue: 1.2, useNativeDriver: false }).start();
       },
       onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
       onPanResponderRelease: (e, gesture) => {
         Animated.spring(scale, { toValue: 1, useNativeDriver: false }).start();
         
+        // Nếu kéo cao lên hướng đĩa cân (dy < -60) thì rớt xuống phát tiếng Boing
         if (gesture.dy < -60) {
+          playDropSound();
           onDrop(item);
         } else {
+          // Trượt tay thì bay về rổ (không phát tiếng rơi)
           Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
         }
       }
