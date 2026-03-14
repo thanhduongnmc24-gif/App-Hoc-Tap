@@ -5,6 +5,14 @@ export const GIOI_IMAGES = [
   require('../assets/images/anh_tinh_diem/gioi/1.png'),
   require('../assets/images/anh_tinh_diem/gioi/2.png'),
   require('../assets/images/anh_tinh_diem/gioi/3.png'),
+  require('../assets/images/anh_tinh_diem/gioi/IMG_0988.PNG.png'),
+  require('../assets/images/anh_tinh_diem/gioi/IMG_0989.PNG.png'),
+  require('../assets/images/anh_tinh_diem/gioi/IMG_0991.PNG.png'),
+  require('../assets/images/anh_tinh_diem/gioi/IMG_0992.PNG.png'),
+  require('../assets/images/anh_tinh_diem/gioi/IMG_0993.PNG.png'),
+  require('../assets/images/anh_tinh_diem/gioi/IMG_0994.PNG.png'),
+  require('../assets/images/anh_tinh_diem/gioi/IMG_0995.PNG.png'),
+  require('../assets/images/anh_tinh_diem/gioi/IMG_0998.PNG.png'),
 ];
 
 export const TOT_IMAGES = [

@@ -17,7 +17,7 @@ export const GIOI_VIDEOS = [
 ];
 
 export const TOT_VIDEOS = [
-  require('../assets/videos/tot/tot_1.mp4'),
+  require('../assets/videos/tot/s.mp4'),
 ];
 
 export const CAN_CO_GAN_VIDEOS = [
