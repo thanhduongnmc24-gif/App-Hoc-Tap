@@ -7,7 +7,7 @@ export const LOTTIE_ANIMALS = [
   require('../assets/lottie/Dancing llama.json'),
   require('../assets/lottie/Dog.json'),
   require('../assets/lottie/Flossy Dance.json'),
-  require('../assets/lottie/Ga.json'),
+  
   require('../assets/lottie/Gatay.json'),
   require('../assets/lottie/Happy Dog.json'),
   require('../assets/lottie/Jellyfish greeting you!.json'),
