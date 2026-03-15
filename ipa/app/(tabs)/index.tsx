@@ -98,21 +98,19 @@ export default function LearningScreen() {
     }
   };
 
-  // BỘ NÃO RA ĐỀ MỚI CỦA TÈO
+  // BỘ NÃO RA ĐỀ PHIÊN BẢN NÂNG CẤP V2 CỦA TÈO
   const createNewProblems = (limit: number) => {
     setIsSubmitted(false);
     let additions: Problem[] = [];
     let subtractions: Problem[] = [];
     const usedCombos = new Set<string>();
 
-    // Nếu lỡ limit cài quá thấp thì ép nó lên 2 để có cái mà cộng trừ
     const safeLimit = Math.max(limit, 2);
 
     // --- BƯỚC 1: TẠO ĐÚNG 5 PHÉP CỘNG ---
     let attempts = 0;
     while (additions.length < 5 && attempts < 100) {
       attempts++;
-      // Đảm bảo num1 và num2 bốc từ 1 trở lên, không có số 0
       let num1 = Math.floor(Math.random() * (safeLimit - 1)) + 1; 
       let num2 = Math.floor(Math.random() * (safeLimit - num1)) + 1; 
       
@@ -122,7 +120,6 @@ export default function LearningScreen() {
         additions.push({ id: 0, num1, num2, operator: '+', userAnswer: '' });
       }
     }
-    // Phòng hờ nếu vòng lặp bị kẹt, vẫn châm đủ 5 câu
     while (additions.length < 5) {
       let num1 = Math.floor(Math.random() * (safeLimit - 1)) + 1;
       let num2 = Math.floor(Math.random() * (safeLimit - num1)) + 1;
@@ -130,35 +127,69 @@ export default function LearningScreen() {
     }
 
     // --- BƯỚC 2: TẠO ĐÚNG 5 PHÉP TRỪ ---
+    let hasZeroResultProblem = false; // Công tắc thần thánh giới hạn 1 câu = 0
     attempts = 0;
+
     while (subtractions.length < 5 && attempts < 100) {
       attempts++;
-      // num1 từ 1 đến safeLimit. num2 từ 1 đến num1. Không có số 0
       let num1 = Math.floor(Math.random() * safeLimit) + 1; 
-      let num2 = Math.floor(Math.random() * num1) + 1; 
+      
+      // Nếu đã có 1 câu đáp án = 0 rồi thì số thứ nhất KHÔNG ĐƯỢC là 1
+      if (hasZeroResultProblem && num1 === 1) {
+         continue; 
+      }
+
+      let num2;
+      if (hasZeroResultProblem) {
+         // Ép số thứ 2 nhỏ hơn số thứ 1 tuyệt đối (để đáp án luôn lớn hơn 0)
+         num2 = Math.floor(Math.random() * (num1 - 1)) + 1;
+      } else {
+         // Vẫn cho phép bốc số bằng nhau
+         num2 = Math.floor(Math.random() * num1) + 1;
+      }
       
       const comboKey = `${num1}-${num2}`;
       if (!usedCombos.has(comboKey)) {
         usedCombos.add(comboKey);
         subtractions.push({ id: 0, num1, num2, operator: '-', userAnswer: '' });
+        
+        // Cập nhật công tắc nếu vừa thả 1 câu X - X = 0 vào rổ
+        if (num1 === num2) {
+           hasZeroResultProblem = true;
+        }
       }
     }
+
+    // Đề phòng vòng lặp hết lượt chạy mà vẫn thiếu câu
     while (subtractions.length < 5) {
       let num1 = Math.floor(Math.random() * safeLimit) + 1;
-      let num2 = Math.floor(Math.random() * num1) + 1;
+      if (hasZeroResultProblem && num1 === 1) {
+         num1 = 2; // Đẩy lên 2 để có thể tạo câu 2 - 1 = 1
+      }
+
+      let num2;
+      if (hasZeroResultProblem) {
+        num2 = Math.floor(Math.random() * (num1 - 1)) + 1;
+      } else {
+        num2 = Math.floor(Math.random() * num1) + 1;
+      }
+
       subtractions.push({ id: 0, num1, num2, operator: '-', userAnswer: '' });
+      if (num1 === num2) {
+        hasZeroResultProblem = true;
+      }
     }
 
     // --- BƯỚC 3: GỘP LẠI VÀ XÓC ĐĨA ---
     const combined = [...additions, ...subtractions];
     
-    // Xáo trộn ngẫu nhiên (Thuật toán Fisher-Yates)
+    // Trộn ngẫu nhiên bài toán
     for (let i = combined.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [combined[i], combined[j]] = [combined[j], combined[i]];
     }
 
-    // --- BƯỚC 4: ĐÁNH LẠI SỐ BÁO DANH CHO REACT KHỎI LỖI ---
+    // --- BƯỚC 4: ĐÁNH LẠI ID CHO REACT KHỎI LA LÀNG ---
     return combined.map((prob, index) => ({ ...prob, id: index }));
   };
 
