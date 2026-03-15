@@ -20,6 +20,7 @@ type Problem = {
   id: number;
   num1: number;
   num2: number;
+  operator: '+' | '-';
   userAnswer: string;
 };
 
@@ -97,37 +98,68 @@ export default function LearningScreen() {
     }
   };
 
+  // BỘ NÃO RA ĐỀ MỚI CỦA TÈO
   const createNewProblems = (limit: number) => {
     setIsSubmitted(false);
-    const newProblems: Problem[] = [];
+    let additions: Problem[] = [];
+    let subtractions: Problem[] = [];
     const usedCombos = new Set<string>();
-    
-    let maxAttempts = 100;
+
+    // Nếu lỡ limit cài quá thấp thì ép nó lên 2 để có cái mà cộng trừ
+    const safeLimit = Math.max(limit, 2);
+
+    // --- BƯỚC 1: TẠO ĐÚNG 5 PHÉP CỘNG ---
     let attempts = 0;
-
-    while (newProblems.length < 10 && attempts < maxAttempts) {
+    while (additions.length < 5 && attempts < 100) {
       attempts++;
-      let num1 = Math.floor(Math.random() * (limit - 1)) + 1;
-      let num2 = Math.floor(Math.random() * (limit - num1)) + 1;
+      // Đảm bảo num1 và num2 bốc từ 1 trở lên, không có số 0
+      let num1 = Math.floor(Math.random() * (safeLimit - 1)) + 1; 
+      let num2 = Math.floor(Math.random() * (safeLimit - num1)) + 1; 
       
-      if (limit <= 1) { num1 = 0; num2 = 1; }
-
       const comboKey = `${num1}+${num2}`;
-
       if (!usedCombos.has(comboKey)) {
         usedCombos.add(comboKey);
-        newProblems.push({ id: newProblems.length, num1, num2, userAnswer: '' });
+        additions.push({ id: 0, num1, num2, operator: '+', userAnswer: '' });
       }
     }
-
-    while (newProblems.length < 10) {
-      let num1 = Math.floor(Math.random() * (limit - 1)) + 1;
-      let num2 = Math.floor(Math.random() * (limit - num1)) + 1;
-      if (limit <= 1) { num1 = 0; num2 = 1; }
-      newProblems.push({ id: newProblems.length, num1, num2, userAnswer: '' });
+    // Phòng hờ nếu vòng lặp bị kẹt, vẫn châm đủ 5 câu
+    while (additions.length < 5) {
+      let num1 = Math.floor(Math.random() * (safeLimit - 1)) + 1;
+      let num2 = Math.floor(Math.random() * (safeLimit - num1)) + 1;
+      additions.push({ id: 0, num1, num2, operator: '+', userAnswer: '' });
     }
 
-    return newProblems;
+    // --- BƯỚC 2: TẠO ĐÚNG 5 PHÉP TRỪ ---
+    attempts = 0;
+    while (subtractions.length < 5 && attempts < 100) {
+      attempts++;
+      // num1 từ 1 đến safeLimit. num2 từ 1 đến num1. Không có số 0
+      let num1 = Math.floor(Math.random() * safeLimit) + 1; 
+      let num2 = Math.floor(Math.random() * num1) + 1; 
+      
+      const comboKey = `${num1}-${num2}`;
+      if (!usedCombos.has(comboKey)) {
+        usedCombos.add(comboKey);
+        subtractions.push({ id: 0, num1, num2, operator: '-', userAnswer: '' });
+      }
+    }
+    while (subtractions.length < 5) {
+      let num1 = Math.floor(Math.random() * safeLimit) + 1;
+      let num2 = Math.floor(Math.random() * num1) + 1;
+      subtractions.push({ id: 0, num1, num2, operator: '-', userAnswer: '' });
+    }
+
+    // --- BƯỚC 3: GỘP LẠI VÀ XÓC ĐĨA ---
+    const combined = [...additions, ...subtractions];
+    
+    // Xáo trộn ngẫu nhiên (Thuật toán Fisher-Yates)
+    for (let i = combined.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [combined[i], combined[j]] = [combined[j], combined[i]];
+    }
+
+    // --- BƯỚC 4: ĐÁNH LẠI SỐ BÁO DANH CHO REACT KHỎI LỖI ---
+    return combined.map((prob, index) => ({ ...prob, id: index }));
   };
 
   const handleKeyPress = (val: string) => {
@@ -173,7 +205,8 @@ export default function LearningScreen() {
 
     let currentScore = 0;
     problems.forEach(p => {
-      if (p.num1 + p.num2 === parseInt(p.userAnswer, 10)) {
+      const expectedAnswer = p.operator === '+' ? p.num1 + p.num2 : p.num1 - p.num2;
+      if (expectedAnswer === parseInt(p.userAnswer, 10)) {
         currentScore += 1;
       }
     });
@@ -181,9 +214,6 @@ export default function LearningScreen() {
     setScore(currentScore);
     setIsSubmitted(true);
     
-    // ========================================================
-    // BỐC THĂM KHÔNG TRÙNG LẶP CHO ĐẾN KHI HẾT RỔ VIDEO
-    // ========================================================
     let selectedImageArray;
     let originalVideoArray;
     let unseenRef: React.MutableRefObject<any[]>;
@@ -202,26 +232,20 @@ export default function LearningScreen() {
       unseenRef = unseenCanCoGan;
     }
 
-    // 1. Ảnh vẫn bốc ngẫu nhiên (có thể lặp)
     if (selectedImageArray && selectedImageArray.length > 0) {
         const randImg = selectedImageArray[Math.floor(Math.random() * selectedImageArray.length)];
         setRandomImage(randImg);
     }
 
-    // 2. Video bốc ngẫu nhiên KHÔNG LẶP LẠI
     if (originalVideoArray && originalVideoArray.length > 0) {
-        // Nếu rổ nháp trống trơn (chiếu hết sạch rồi), đổ đầy lại từ kho gốc
         if (unseenRef.current.length === 0) {
             unseenRef.current = [...originalVideoArray];
         }
 
-        // Bốc đại 1 cái từ rổ nháp
         const randomIndex = Math.floor(Math.random() * unseenRef.current.length);
         const randVid = unseenRef.current[randomIndex];
 
-        // Rút thẻ video đó ra khỏi rổ để lần sau không bốc trúng nữa
         unseenRef.current.splice(randomIndex, 1);
-
         setRandomVideo(randVid);
     } else {
         setRandomVideo(null); 
@@ -229,7 +253,6 @@ export default function LearningScreen() {
     
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
 
-    // Hẹn giờ 1 giây sau bung lụa
     setTimeout(() => {
       if (originalVideoArray && originalVideoArray.length > 0) {
         setShowVideoPopup(true);
@@ -316,14 +339,14 @@ export default function LearningScreen() {
         <View style={styles.exerciseColumn}>
           <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {problems.map((p, index) => {
-              const correctAnswer = p.num1 + p.num2;
+              const correctAnswer = p.operator === '+' ? p.num1 + p.num2 : p.num1 - p.num2;
               const isWrong = isSubmitted && parseInt(p.userAnswer, 10) !== correctAnswer;
               
               return (
                 <View key={p.id} style={styles.problemRow}>
                   <Text style={[styles.problemText, { color: colors.text }]}>Câu {index + 1}:</Text>
                   <View style={styles.mathExpression}>
-                    <Text style={[styles.mathText, { color: colors.text }]}>{p.num1} + {p.num2} =</Text>
+                    <Text style={[styles.mathText, { color: colors.text }]}>{p.num1} {p.operator} {p.num2} =</Text>
                     
                     <TouchableOpacity 
                       style={[
@@ -368,9 +391,6 @@ export default function LearningScreen() {
         </View>
       </View>
 
-      {/* ========================================================================= */}
-      {/* POPUP VIDEO ĐÃ ÉP VÀO 1 GÓC XINH XẮN THEO ĐÚNG TỈ LỆ */}
-      {/* ========================================================================= */}
       <Modal visible={showVideoPopup && randomVideo !== null} transparent={true} animationType="fade">
         <View style={styles.videoOverlay}>
           <View style={styles.videoWrapper}>
@@ -435,44 +455,9 @@ const styles = StyleSheet.create({
   replayBtn: { backgroundColor: '#10B981', paddingVertical: 15, paddingHorizontal: 25, borderRadius: 15, width: '100%', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 },
   replayBtnText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
 
-  // STYLES CHO VIDEO POPUP
-  videoOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)', 
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  videoWrapper: {
-    width: width * 0.5,   
-    height: width * 0.5 * (9/16), 
-    backgroundColor: '#000', 
-    borderRadius: 20,
-    overflow: 'hidden', 
-    elevation: 10, 
-    shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.5, shadowRadius: 10,
-  },
-  smallVideo: {
-    position: 'absolute', // Bùa trói 4 góc cho video không chạy lộn xộn
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  skipVideoBtn: {
-    position: 'absolute',
-    top: 10, 
-    right: 10,
-    backgroundColor: 'rgba(255,255,255,0.3)', 
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10, 
-  },
-  skipVideoText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold'
-  }
+  videoOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.6)', justifyContent: 'center', alignItems: 'center' },
+  videoWrapper: { width: width * 0.5, height: width * 0.5 * (9/16), backgroundColor: '#000', borderRadius: 20, overflow: 'hidden', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.5, shadowRadius: 10 },
+  smallVideo: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  skipVideoBtn: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(255,255,255,0.3)', width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', zIndex: 10 },
+  skipVideoText: { color: 'white', fontSize: 18, fontWeight: 'bold' }
 });
