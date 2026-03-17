@@ -48,6 +48,11 @@ const mappings = [
     src: path.join(tramDir, 'anh_tinh_diem', 'can_co_gan'),
     dest: path.join(assetsDir, 'images', 'anh_tinh_diem', 'can_co_gan')
   },
+  // THÊM BĂNG CHUYỀN CHO GAME THỬ THÁCH NÈ ANH HAI
+  {
+    src: path.join(tramDir, 'anh_game_thu_thach'),
+    dest: path.join(assetsDir, 'images', 'anh_game_thu_thach')
+  },
   {
     src: path.join(tramDir, 'videos', 'gioi'),
     dest: path.join(assetsDir, 'videos', 'gioi')
@@ -64,7 +69,6 @@ const mappings = [
     src: path.join(tramDir, 'game_cho_vat_an'),
     dest: path.join(assetsDir, 'game_cho_vat_an')
   },
-  // BĂNG CHUYỀN MỚI CHO THÚ NHÚN LOTTIE (GAME BẬP BÊNH)
   {
     src: path.join(tramDir, 'lottie_animals'),
     dest: path.join(assetsDir, 'lottie')
@@ -93,8 +97,7 @@ mappings.forEach(map => {
         let destPath = path.join(map.dest, finalName);
         
         if (fs.existsSync(destPath)) {
-          // Xóa cũ đè mới cho sạch sẽ
-          fs.unlinkSync(destPath); 
+          fs.unlinkSync(destPath); // Xóa cũ đè mới
         }
         
         fs.renameSync(sourcePath, destPath);
@@ -128,20 +131,28 @@ tapDocContent += `];\n`;
 fs.writeFileSync(path.join(constantsDir, 'kho_tap_doc.ts'), tapDocContent, 'utf8');
 console.log(`✅ Sổ Tập Đọc : Ghi nhận ${tapDocFiles.length} hình!`);
 
-// 2. XỬ LÝ KHO ẢNH TOÁN
+// 2. XỬ LÝ KHO ẢNH TOÁN & THỬ THÁCH
 const anhGioiDir = path.join(assetsDir, 'images', 'anh_tinh_diem', 'gioi');
 const anhTotDir = path.join(assetsDir, 'images', 'anh_tinh_diem', 'tot');
 const anhCanCoGanDir = path.join(assetsDir, 'images', 'anh_tinh_diem', 'can_co_gan');
+const anhThuThachDir = path.join(assetsDir, 'images', 'anh_game_thu_thach');
+
+ensureDir(anhThuThachDir);
+
 const makeKhoAnhContent = () => {
-  let content = `// File này Tèo code tự động.\n// Đại ca quăng ảnh vào tram_nhap_hang/anh_tinh_diem/... rồi chạy Tool nha!\n\n`;
+  let content = `// File này Tèo code tự động.\n// Đại ca quăng ảnh vào tram_nhap_hang/anh_tinh_diem/... hoặc tram_nhap_hang/anh_game_thu_thach rồi chạy Tool nha!\n\n`;
   content += `export const GIOI_IMAGES = [\n${getFiles(anhGioiDir, imageExts).map(f => `  require('../assets/images/anh_tinh_diem/gioi/${f}'),`).join('\n')}\n];\n\n`;
   content += `export const TOT_IMAGES = [\n${getFiles(anhTotDir, imageExts).map(f => `  require('../assets/images/anh_tinh_diem/tot/${f}'),`).join('\n')}\n];\n\n`;
   content += `export const CAN_CO_GAN_IMAGES = [\n${getFiles(anhCanCoGanDir, imageExts).map(f => `  require('../assets/images/anh_tinh_diem/can_co_gan/${f}'),`).join('\n')}\n];\n\n`;
-  content += `export const ALL_IMAGES = [...GIOI_IMAGES, ...TOT_IMAGES, ...CAN_CO_GAN_IMAGES];\n`;
+  
+  // TÈO ĐÓNG GÓI KHO THỬ THÁCH MỚI VÀO ĐÂY LUN NÈ
+  content += `export const THU_THACH_IMAGES = [\n${getFiles(anhThuThachDir, imageExts).map(f => `  require('../assets/images/anh_game_thu_thach/${f}'),`).join('\n')}\n];\n\n`;
+  
+  content += `export const ALL_IMAGES = [...GIOI_IMAGES, ...TOT_IMAGES, ...CAN_CO_GAN_IMAGES, ...THU_THACH_IMAGES];\n`;
   return content;
 };
 fs.writeFileSync(path.join(constantsDir, 'kho_anh.ts'), makeKhoAnhContent(), 'utf8');
-console.log(`✅ Sổ Ảnh Toán: Cập nhật thành công!`);
+console.log(`✅ Sổ Ảnh : Đã cập nhật xong ảnh Toán và ảnh Thử Thách!`);
 
 // 3. XỬ LÝ KHO VIDEO TOÁN
 const videoGioiDir = path.join(assetsDir, 'videos', 'gioi');
@@ -190,11 +201,11 @@ khoDongVatContent += `];\n`;
 fs.writeFileSync(path.join(constantsDir, 'kho_dong_vat.ts'), khoDongVatContent, 'utf8');
 console.log(`✅ Sổ Động Vật : Đã ghép thành công ${validCount} con vật vào rạp xiếc!`);
 
-// 5. XỬ LÝ KHO LOTTIE CHO GAME BẬP BÊNH (MỚI NÈ ĐẠI CA)
+// 5. XỬ LÝ KHO LOTTIE CHO GAME BẬP BÊNH
 const lottieAssetDir = path.join(assetsDir, 'lottie');
 ensureDir(lottieAssetDir);
 const lottieFiles = getFiles(lottieAssetDir, lottieExts);
-let khoLottieContent = `// File này Tèo code tự động.\n// Đại ca tải file .json (hoạt hình Lottie) ném vào tram_nhap_hang/lottie_animals rồi chạy Tool nha!\n\nexport const LOTTIE_ANIMALS = [\n`;
+let khoLottieContent = `// File này Tèo code tự động.\n// Đại ca tải file .json ném vào tram_nhap_hang/lottie_animals rồi chạy Tool nha!\n\nexport const LOTTIE_ANIMALS = [\n`;
 lottieFiles.forEach(file => {
   khoLottieContent += `  require('../assets/lottie/${file}'),\n`;
 });

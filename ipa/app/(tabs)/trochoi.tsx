@@ -12,6 +12,8 @@ import LottieView from 'lottie-react-native';
 import { KHO_DONG_VAT } from '../../constants/kho_dong_vat';
 // Kho Lottie (Dùng cho Game 2)
 import { LOTTIE_ANIMALS } from '../../constants/kho_lottie';
+// Kho ảnh Thử Thách (Dùng cho Game 4)
+import { THU_THACH_IMAGES } from '../../constants/kho_anh';
 
 const { width } = Dimensions.get('window');
 
@@ -123,7 +125,7 @@ const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () =
 };
 
 // ==========================================
-// COMPONENT KÉO THẢ DÀNH CHO GAME 2 (CÓ ÂM THANH 🎵)
+// GAME 2: BẬP BÊNH TOÁN HỌC ⚖️
 // ==========================================
 const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: (i: any) => void, isAnimal?: boolean }) => {
   const pan = useRef(new Animated.ValueXY()).current;
@@ -185,9 +187,6 @@ const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: 
   );
 };
 
-// ==========================================
-// GAME 2: BẬP BÊNH TOÁN HỌC ⚖️
-// ==========================================
 const BLOCK_COLORS = [
   { bg: '#FCA5A5', border: '#B91C1C' }, { bg: '#93C5FD', border: '#1D4ED8' }, 
   { bg: '#86EFAC', border: '#15803D' }, { bg: '#FDE047', border: '#A16207' }, 
@@ -318,7 +317,6 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
 // ==========================================
 // GAME 3: ĐẬP THÚ NHÚN (WHACK-A-MOLE) 🐹🔨
 // ==========================================
-// (Đoạn này Tèo giữ nguyên bản anh em mình đã làm ngon lành hôm trước, không đụng tới 1 chữ)
 const HOLE_COUNT = 9;
 const MOLE_EMOJIS = ['🐹', '🐱', '🐶', '🐰', '🐼']; 
 const MAX_MISSES = 5; 
@@ -444,125 +442,115 @@ const DapThuGame = ({ onBack }: { onBack: () => void }) => {
 };
 
 // ==========================================
-// GAME 4: TRẠM NUÔI THÚ ẢO (TAMAGOTCHI) 🐹🍼
 // ==========================================
-const NuoiThuGame = ({ onBack }: { onBack: () => void }) => {
-  // Chỉ số sinh tồn của bé thú (Max 100)
-  const [stats, setStats] = useState({ hunger: 50, hygiene: 50, fun: 50 });
-  const [actionEffect, setActionEffect] = useState<string | null>(null); // Trạng thái hiệu ứng (ăn, tắm)
-  
-  const petScale = useRef(new Animated.Value(1)).current;
-  const bounceAnim = useRef(new Animated.Value(0)).current;
+// GAME 4: THỬ THÁCH VUI NHỘN (SLOT MACHINE) 🃏✨
+// ==========================================
+const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
+  const KHO_THU_THACH = THU_THACH_IMAGES.map((img, index) => ({ id: index, image: img }));
 
-  // Cỗ máy thời gian: Cứ 3 giây tụt chỉ số 1 lần cho giống nuôi thật
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [showCard, setShowCard] = useState(false);
+  const [currentImg, setCurrentImg] = useState<any>(null);
+  const [lastImgId, setLastImgId] = useState<number | null>(null);
+  
+  const bounceAnim = useRef(new Animated.Value(1)).current;
+  
+  // 👉 KHAI BÁO CHUẨN NẰM Ở TRÊN CÙNG ĐÂY NÈ ANH HAI
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startSpin = () => {
+    if (isSpinning) return;
+    setIsSpinning(true);
+    setShowCard(true);
+    
+    let speed = 50;  // Tốc độ lật ban đầu (siêu nhanh)
+    let spins = 0;
+    const maxSpins = 25; // Quay khoảng 25 vòng rồi chốt
+
+    const spin = () => {
+      spins++;
+      const randomIdx = Math.floor(Math.random() * KHO_THU_THACH.length);
+      setCurrentImg(KHO_THU_THACH[randomIdx]);
+
+      if (spins < maxSpins) {
+        speed += 15; // Giảm tốc từ từ
+        
+        // 👉 TRẢ LẠI DÒNG NÀY VỀ NGUYÊN BẢN (Gán giá trị cho Ref)
+        timeoutRef.current = setTimeout(spin, speed);
+        
+      } else {
+        // Cú chốt hạ! Chọn 1 hình ngẫu nhiên nhưng CẤM TRÙNG với hình vừa ra trước đó
+        let finalIdx = Math.floor(Math.random() * KHO_THU_THACH.length);
+        while (KHO_THU_THACH.length > 1 && KHO_THU_THACH[finalIdx].id === lastImgId) {
+          finalIdx = Math.floor(Math.random() * KHO_THU_THACH.length);
+        }
+        
+        const finalImage = KHO_THU_THACH[finalIdx];
+        setCurrentImg(finalImage);
+        setLastImgId(finalImage.id); // Lưu lại lịch sử để vòng sau chặn
+        setIsSpinning(false);
+        
+        // Hiệu ứng giật nảy thẻ bài báo hiệu đã chọn xong
+        Animated.sequence([
+          Animated.timing(bounceAnim, { toValue: 1.1, duration: 150, useNativeDriver: true }),
+          Animated.spring(bounceAnim, { toValue: 1, friction: 3, useNativeDriver: true })
+        ]).start();
+      }
+    };
+    
+    spin(); // Bắt đầu quay xèng
+  };
+
   useEffect(() => {
-    const timer = setInterval(() => {
-      setStats(prev => ({
-        hunger: Math.max(0, prev.hunger - 2),
-        hygiene: Math.max(0, prev.hygiene - 1),
-        fun: Math.max(0, prev.fun - 3),
-      }));
-    }, 3000);
-    return () => clearInterval(timer);
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
   }, []);
 
-  // Nhún nhảy mỗi khi có tương tác
-  const triggerAnim = () => {
-    Animated.sequence([
-      Animated.timing(petScale, { toValue: 1.2, duration: 150, useNativeDriver: true }),
-      Animated.spring(petScale, { toValue: 1, friction: 3, useNativeDriver: true })
-    ]).start();
-  };
-
-  // Cứu đói
-  const handleFeed = () => {
-    setStats(prev => ({ ...prev, hunger: Math.min(100, prev.hunger + 20), hygiene: Math.max(0, prev.hygiene - 5) }));
-    setActionEffect('🍔'); triggerAnim();
-    setTimeout(() => setActionEffect(null), 1000);
-  };
-
-  // Tắm rửa
-  const handleBath = () => {
-    setStats(prev => ({ ...prev, hygiene: Math.min(100, prev.hygiene + 30) }));
-    setActionEffect('🫧'); triggerAnim();
-    setTimeout(() => setActionEffect(null), 1000);
-  };
-
-  // Vuốt ve chọc lét
-  const handlePlay = () => {
-    setStats(prev => ({ ...prev, fun: Math.min(100, prev.fun + 25), hunger: Math.max(0, prev.hunger - 10) }));
-    setActionEffect('💖'); triggerAnim();
-    setTimeout(() => setActionEffect(null), 1000);
-  };
-
-  // Tính toán khuôn mặt thú cưng dựa theo chỉ số
-  const getPetFace = () => {
-    if (stats.hunger === 0 || stats.hygiene === 0 || stats.fun === 0) return '😭'; // Khóc lóc bốc mùi
-    if (stats.hunger > 80 && stats.hygiene > 80 && stats.fun > 80) return '😍'; // Sướng rơn
-    if (stats.hygiene < 30) return '🤢'; // Dơ quá sắp bệnh
-    if (stats.hunger < 30) return '🤤'; // Đói chảy dãi
-    return '🐹'; // Capybara bình thường
-  };
-
-  // Render thanh máu
-  const renderBar = (icon: string, value: number, color: string) => (
-    <View style={styles.petStatRow}>
-      <Text style={styles.petStatIcon}>{icon}</Text>
-      <View style={styles.petStatBg}>
-        <View style={[styles.petStatFill, { width: `${value}%`, backgroundColor: color }]} />
-      </View>
-    </View>
-  );
-
   return (
-    <View style={[styles.gameContainer, { backgroundColor: '#FDF4FF' }]}>
+    <View style={[styles.gameContainer, { backgroundColor: '#FFEDD5', alignItems: 'center', justifyContent: 'center' }]}>
+      {!isSpinning && showCard && <ConfettiCannon count={100} origin={{x: width / 2, y: 0}} fallSpeed={2000} />}
+      
       <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-        <Ionicons name="arrow-back-circle" size={50} color="#C026D3" />
+        <Ionicons name="arrow-back-circle" size={50} color="#EA580C" />
       </TouchableOpacity>
 
-      <View style={styles.petHeader}>
-        <Text style={styles.petTitle}>Trạm Chăm Sóc Bé Lùn</Text>
-      </View>
+      <Text style={styles.thuThachTitle}>🎲 Thử Thách Vui Nhộn 🎲</Text>
 
-      {/* Bảng chỉ số */}
-      <View style={styles.petStatsBoard}>
-        {renderBar('🍗', stats.hunger, '#EF4444')}
-        {renderBar('🧼', stats.hygiene, '#3B82F6')}
-        {renderBar('🎾', stats.fun, '#F59E0B')}
-      </View>
-
-      {/* Sân khấu thú cưng */}
-      <View style={styles.petStage}>
-        {actionEffect && (
-          <Text style={styles.petEffectIcon}>{actionEffect}</Text>
+      {/* Sân khấu thẻ bài */}
+      <View style={styles.cardStage}>
+        {showCard && currentImg ? (
+          <Animated.View style={[styles.challengeCard, { transform: [{ scale: bounceAnim }] }]}>
+            <Image source={currentImg.image} style={styles.challengeImg} resizeMode="contain" />
+            {isSpinning && <View style={styles.spinningOverlay} />}
+          </Animated.View>
+        ) : (
+          <View style={[styles.challengeCard, styles.cardPlaceholder]}>
+            <Text style={{ fontSize: 100 }}>❓</Text>
+            <Text style={{ fontSize: 20, color: '#EA580C', fontWeight: 'bold', marginTop: 10 }}>Bé sẵn sàng chưa?</Text>
+          </View>
         )}
-        <Animated.View style={{ transform: [{ scale: petScale }] }}>
-          <Text style={styles.petAvatar}>{getPetFace()}</Text>
-        </Animated.View>
-        <View style={styles.petShadow} />
       </View>
 
-      {/* Bộ điều khiển */}
-      <View style={styles.petControls}>
-        <TouchableOpacity style={[styles.petBtn, { backgroundColor: '#FECACA', borderColor: '#EF4444' }]} onPress={handleFeed}>
-          <Text style={styles.petBtnIcon}>🍗</Text>
-          <Text style={styles.petBtnText}>Cho Ăn</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={[styles.petBtn, { backgroundColor: '#BFDBFE', borderColor: '#3B82F6' }]} onPress={handleBath}>
-          <Text style={styles.petBtnIcon}>🧼</Text>
-          <Text style={styles.petBtnText}>Tắm Rửa</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={[styles.petBtn, { backgroundColor: '#FDE68A', borderColor: '#F59E0B' }]} onPress={handlePlay}>
-          <Text style={styles.petBtnIcon}>🎾</Text>
-          <Text style={styles.petBtnText}>Chơi Đùa</Text>
-        </TouchableOpacity>
+      {/* Nút bấm */}
+      <View style={styles.thuThachControls}>
+        {!showCard ? (
+           <TouchableOpacity style={[styles.spinBtn, { backgroundColor: '#F97316', borderColor: '#C2410C' }]} onPress={startSpin}>
+             <Text style={styles.spinBtnText}>🚀 BẮT ĐẦU</Text>
+           </TouchableOpacity>
+        ) : (
+           <TouchableOpacity 
+              style={[styles.spinBtn, { backgroundColor: isSpinning ? '#CBD5E1' : '#10B981', borderColor: isSpinning ? '#94A3B8' : '#047857' }]} 
+              onPress={startSpin} 
+              disabled={isSpinning}
+           >
+             <Text style={[styles.spinBtnText, { color: isSpinning ? 'gray' : 'white' }]}>
+                {isSpinning ? 'Đang chọn thẻ...' : '🎲 ĐỔI THỬ THÁCH KHÁC'}
+             </Text>
+           </TouchableOpacity>
+        )}
       </View>
     </View>
   );
 };
-
 
 // ==========================================
 // MÀN HÌNH CHÍNH QUẢN LÝ CÁC TRÒ CHƠI
@@ -571,8 +559,7 @@ export default function TroChoiHubScreen() {
   const { colors } = useTheme();
   const [maxLimit, setMaxLimit] = useState(10);
   
-  // TÈO ĐÃ MỞ KHÓA THÊM GAME SỐ 4 'nuoi_thu' VÀO HUB
-  const [currentGame, setCurrentGame] = useState<'menu' | 'cho_an' | 'bap_benh' | 'dap_thu' | 'nuoi_thu'>('menu');
+  const [currentGame, setCurrentGame] = useState<'menu' | 'cho_an' | 'bap_benh' | 'dap_thu' | 'thu_thach'>('menu');
 
   useFocusEffect(
     useCallback(() => {
@@ -590,7 +577,7 @@ export default function TroChoiHubScreen() {
   if (currentGame === 'cho_an') return <ChoDongVatAnGame maxLimit={maxLimit} onBack={() => setCurrentGame('menu')} />;
   if (currentGame === 'bap_benh') return <BapBenhGame maxLimit={maxLimit} onBack={() => setCurrentGame('menu')} />;
   if (currentGame === 'dap_thu') return <DapThuGame onBack={() => setCurrentGame('menu')} />;
-  if (currentGame === 'nuoi_thu') return <NuoiThuGame onBack={() => setCurrentGame('menu')} />; // Load game Nuôi Thú
+  if (currentGame === 'thu_thach') return <ThuThachGame onBack={() => setCurrentGame('menu')} />; 
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -626,12 +613,12 @@ export default function TroChoiHubScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* GAME 4: NUÔI THÚ ẢO */}
-        <TouchableOpacity style={[styles.menuCard, { borderColor: '#D946EF', backgroundColor: '#FDF4FF' }]} onPress={() => setCurrentGame('nuoi_thu')}>
-          <Text style={styles.menuIcon}>🍼</Text>
+        {/* GAME 4: THỬ THÁCH VUI NHỘN */}
+        <TouchableOpacity style={[styles.menuCard, { borderColor: '#EA580C', backgroundColor: '#FFF7ED' }]} onPress={() => setCurrentGame('thu_thach')}>
+          <Text style={styles.menuIcon}>🃏</Text>
           <View>
-            <Text style={[styles.menuTitle, { color: '#A21CAF' }]}>Trạm Nuôi Thú Ảo</Text>
-            <Text style={{ color: '#C026D3', fontSize: 16 }}>Chăm sóc thú cưng mỗi ngày!</Text>
+            <Text style={[styles.menuTitle, { color: '#C2410C' }]}>Thử Thách Vui Nhộn</Text>
+            <Text style={{ color: '#EA580C', fontSize: 16 }}>Quay xèng bốc thẻ làm nhiệm vụ!</Text>
           </View>
         </TouchableOpacity>
       </View>
@@ -646,10 +633,10 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingVertical: 15, alignItems: 'center', backgroundColor: '#FEF08A', borderBottomWidth: 3, borderBottomColor: '#FDE047' },
   title: { fontSize: 28, fontWeight: '900', color: '#B45309' },
-  menuContainer: { flex: 1, padding: 20, justifyContent: 'center', alignItems: 'center' },
-  menuCard: { width: '90%', maxWidth: 400, flexDirection: 'row', alignItems: 'center', padding: 15, marginBottom: 15, borderRadius: 25, borderWidth: 4, elevation: 5 },
-  menuIcon: { fontSize: 50, marginRight: 20 },
-  menuTitle: { fontSize: 24, fontWeight: '900' },
+  menuContainer: { flex: 1, padding: 20, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', flexDirection: 'row', gap: 15 },
+  menuCard: { width: '45%', maxWidth: 350, flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 25, borderWidth: 4, elevation: 5 },
+  menuIcon: { fontSize: 50, marginRight: 15 },
+  menuTitle: { fontSize: 22, fontWeight: '900' },
 
   gameContainer: { flex: 1, overflow: 'hidden' },
   backBtn: { position: 'absolute', top: 20, left: 20, zIndex: 99, backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 30 },
@@ -711,23 +698,14 @@ const styles = StyleSheet.create({
   replayBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B981', paddingHorizontal: 25, paddingVertical: 15, borderRadius: 20, borderWidth: 4, borderColor: '#047857', elevation: 5 },
   replayBtnText: { fontSize: 24, fontWeight: '900', color: 'white', marginLeft: 10 },
 
-  // Game 4 Styles (Trạm Nuôi Thú)
-  petHeader: { alignItems: 'center', marginTop: 30, marginBottom: 20 },
-  petTitle: { fontSize: 35, fontWeight: '900', color: '#A21CAF', textShadowColor: '#F0ABFC', textShadowOffset: {width: 2, height: 2}, textShadowRadius: 1 },
-  
-  petStatsBoard: { backgroundColor: 'white', padding: 20, marginHorizontal: 30, borderRadius: 25, borderWidth: 4, borderColor: '#E879F9', elevation: 5 },
-  petStatRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  petStatIcon: { fontSize: 30, marginRight: 10 },
-  petStatBg: { flex: 1, height: 20, backgroundColor: '#F3F4F6', borderRadius: 10, overflow: 'hidden', borderWidth: 2, borderColor: '#D1D5DB' },
-  petStatFill: { height: '100%', borderRadius: 8 },
-  
-  petStage: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  petAvatar: { fontSize: 150, zIndex: 10 },
-  petShadow: { width: 120, height: 20, backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 60, marginTop: -20, zIndex: 1 },
-  petEffectIcon: { position: 'absolute', top: '10%', right: '25%', fontSize: 60, zIndex: 20 },
-
-  petControls: { flexDirection: 'row', justifyContent: 'space-around', padding: 20, paddingBottom: 40, backgroundColor: 'rgba(255,255,255,0.5)', borderTopWidth: 4, borderTopColor: '#F0ABFC' },
-  petBtn: { alignItems: 'center', paddingVertical: 15, paddingHorizontal: 20, borderRadius: 20, borderWidth: 4, elevation: 3 },
-  petBtnIcon: { fontSize: 40, marginBottom: 5 },
-  petBtnText: { fontSize: 18, fontWeight: 'bold', color: '#4B5563' }
+  // Game 4 Styles (Thử Thách)
+  thuThachTitle: { fontSize: 35, fontWeight: '900', color: '#C2410C', marginTop: 20, marginBottom: 20, textShadowColor: '#FDBA74', textShadowOffset: {width: 2, height: 2}, textShadowRadius: 1 },
+  cardStage: { flex: 1, justifyContent: 'center', alignItems: 'center', width: '100%' },
+  challengeCard: { width: 300, height: 400, backgroundColor: 'white', borderRadius: 20, borderWidth: 6, borderColor: '#EA580C', justifyContent: 'center', alignItems: 'center', elevation: 10, overflow: 'hidden' },
+  challengeImg: { width: '90%', height: '90%' },
+  cardPlaceholder: { backgroundColor: '#FFEDD5', borderStyle: 'dashed' },
+  spinningOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255, 255, 255, 0.4)' },
+  thuThachControls: { padding: 30, width: '100%', alignItems: 'center' },
+  spinBtn: { paddingVertical: 20, paddingHorizontal: 40, borderRadius: 30, borderWidth: 5, elevation: 8, shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.3, shadowRadius: 5 },
+  spinBtnText: { fontSize: 26, fontWeight: '900', color: 'white' }
 });
