@@ -10,7 +10,8 @@ import LottieView from 'lottie-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Slider from '@react-native-community/slider';
 
-import { Canvas, Path as SkiaPath, Skia, DashPathEffect, BlurMask } from '@shopify/react-native-skia';
+// TÈO ĐÃ BỎ DashPathEffect VÀ THÊM Group ĐỂ LÀM HIỆU ỨNG NEON SÁNG CHÓI
+import { Canvas, Path as SkiaPath, Skia, BlurMask, Group } from '@shopify/react-native-skia';
 import Svg, { Path as SvgPath } from 'react-native-svg';
 
 import { KHO_DONG_VAT } from '../../constants/kho_dong_vat';
@@ -162,6 +163,10 @@ const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: 
     })
   ).current;
 
+  useEffect(() => {
+    return () => { pan.removeAllListeners(); scale.removeAllListeners(); };
+  }, []);
+
   return (
     <Animated.View style={[{ transform: [...pan.getTranslateTransform(), { scale }] }]} {...panResponder.panHandlers}>
       {isAnimal ? (
@@ -213,6 +218,7 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
 
   const leftWeight = animalPlaced ? gameState.target : 0;
   const rightWeight = placedBlocks.reduce((sum, b) => sum + b.val, 0);
+
   const tiltAnim = useRef(new Animated.Value(0)).current;
   const winScaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -415,7 +421,7 @@ const DapThuGame = ({ onBack }: { onBack: () => void }) => {
 };
 
 // ==========================================
-// GAME 4: THỬ THÁCH VUI NHỘN (TÈO THÊM ẢNH TỪ KHO VÀO ĐÂY)
+// GAME 4: THỬ THÁCH VUI NHỘN
 // ==========================================
 const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
   const [allThuThach, setAllThuThach] = useState<any[]>([]);
@@ -507,7 +513,7 @@ const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
 };
 
 // =========================================================
-// GAME 5A: BÉ TẬP VẼ - PHIÊN BẢN CHẠY TRÊN WEB (DÙNG SVG)
+// GAME 5A: BÉ TẬP VẼ - PHIÊN BẢN CHẠY TRÊN WEB (SVG GỈA LẬP PHÁT SÁNG)
 // =========================================================
 const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allToMau }: any) => {
   const [paths, setPaths] = useState<any[]>([]);
@@ -543,7 +549,7 @@ const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allT
     <View style={[styles.gameContainer, { backgroundColor: '#E5E7EB' }]}>
       <View style={styles.drawHeader}>
         <TouchableOpacity onPress={() => { setMode('menu'); clearAllPaths(); }}><Ionicons name="arrow-back-circle" size={45} color="#4B5563" /></TouchableOpacity>
-        <Text style={{fontWeight: 'bold', color: 'gray'}}>(Bản Web - Nét kim tuyến là nét đứt)</Text>
+        <Text style={{fontWeight: 'bold', color: 'gray'}}>(Bản Web - Nét kim tuyến Glow)</Text>
         <View style={{ flexDirection: 'row', gap: 15 }}>
           <TouchableOpacity style={styles.drawActionBtn} onPress={undoLastPath}><Ionicons name="arrow-undo" size={24} color="white" /><Text style={styles.drawActionText}>Hoàn tác</Text></TouchableOpacity>
           <TouchableOpacity style={[styles.drawActionBtn, { backgroundColor: '#EF4444' }]} onPress={clearAllPaths}><Ionicons name="trash" size={24} color="white" /><Text style={styles.drawActionText}>Xóa hết</Text></TouchableOpacity>
@@ -568,14 +574,28 @@ const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allT
         >
           <Svg style={{ flex: 1 }}>
             {paths.map((p, index) => (
-              <SvgPath key={index} d={p.d} stroke={p.color} strokeWidth={p.strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none"
-                strokeDasharray={p.type === 'kim_tuyen' ? `${p.strokeWidth}, ${p.strokeWidth * 1.5}` : undefined}
-              />
+              <React.Fragment key={index}>
+                {p.type === 'kim_tuyen' ? (
+                  <React.Fragment>
+                    <SvgPath d={p.d} stroke={p.color} strokeWidth={p.strokeWidth * 2} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.4} />
+                    <SvgPath d={p.d} stroke="#FFFFFF" strokeWidth={p.strokeWidth * 0.4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  </React.Fragment>
+                ) : (
+                  <SvgPath d={p.d} stroke={p.color} strokeWidth={p.strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                )}
+              </React.Fragment>
             ))}
             {currentPath && (
-              <SvgPath d={currentPath.d} stroke={currentPath.color} strokeWidth={currentPath.strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none"
-                strokeDasharray={currentPath.type === 'kim_tuyen' ? `${currentPath.strokeWidth}, ${currentPath.strokeWidth * 1.5}` : undefined}
-              />
+              <React.Fragment>
+                {currentPath.type === 'kim_tuyen' ? (
+                  <React.Fragment>
+                    <SvgPath d={currentPath.d} stroke={currentPath.color} strokeWidth={currentPath.strokeWidth * 2} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.4} />
+                    <SvgPath d={currentPath.d} stroke="#FFFFFF" strokeWidth={currentPath.strokeWidth * 0.4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  </React.Fragment>
+                ) : (
+                  <SvgPath d={currentPath.d} stroke={currentPath.color} strokeWidth={currentPath.strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                )}
+              </React.Fragment>
             )}
           </Svg>
         </View>
@@ -603,7 +623,7 @@ const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allT
 };
 
 // =========================================================
-// GAME 5B: BÉ TẬP VẼ - PHIÊN BẢN CHẠY TRÊN ĐIỆN THOẠI (DÙNG SKIA)
+// GAME 5B: BÉ TẬP VẼ - PHIÊN BẢN CHẠY TRÊN ĐIỆN THOẠI (DÙNG SKIA CHUẨN NEON)
 // =========================================================
 const VeTranhGameNative = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allToMau }: any) => {
   const [paths, setPaths] = useState<any[]>([]);
@@ -670,16 +690,33 @@ const VeTranhGameNative = ({ mode, setMode, selectedBg, setSelectedBg, onBack, a
         >
           <Canvas style={{ flex: 1, pointerEvents: 'none' }}>
             {paths.map((p, index) => (
-              <SkiaPath key={index} path={p.path} color={p.color} style="stroke" strokeWidth={p.strokeWidth} strokeCap="round" strokeJoin="round">
-                {p.type === 'kim_tuyen' && <DashPathEffect intervals={[p.strokeWidth, p.strokeWidth * 1.5]} />}
-                {p.type === 'kim_tuyen' && <BlurMask blur={3} style="solid" />}
-              </SkiaPath>
+              <React.Fragment key={index}>
+                {p.type === 'kim_tuyen' ? (
+                  <Group>
+                    <SkiaPath path={p.path} color={p.color} style="stroke" strokeWidth={p.strokeWidth * 2.5} strokeCap="round" strokeJoin="round">
+                      <BlurMask blur={p.strokeWidth} style="normal" />
+                    </SkiaPath>
+                    <SkiaPath path={p.path} color="#FFFFFF" style="stroke" strokeWidth={p.strokeWidth * 0.4} strokeCap="round" strokeJoin="round" />
+                  </Group>
+                ) : (
+                  <SkiaPath path={p.path} color={p.color} style="stroke" strokeWidth={p.strokeWidth} strokeCap="round" strokeJoin="round" />
+                )}
+              </React.Fragment>
             ))}
+            
             {currentPath && (
-              <SkiaPath path={currentPath.path} color={currentPath.color} style="stroke" strokeWidth={currentPath.strokeWidth} strokeCap="round" strokeJoin="round">
-                 {currentPath.type === 'kim_tuyen' && <DashPathEffect intervals={[currentPath.strokeWidth, currentPath.strokeWidth * 1.5]} />}
-                 {currentPath.type === 'kim_tuyen' && <BlurMask blur={3} style="solid" />}
-              </SkiaPath>
+              <React.Fragment>
+                {currentPath.type === 'kim_tuyen' ? (
+                  <Group>
+                    <SkiaPath path={currentPath.path} color={currentPath.color} style="stroke" strokeWidth={currentPath.strokeWidth * 2.5} strokeCap="round" strokeJoin="round">
+                      <BlurMask blur={currentPath.strokeWidth} style="normal" />
+                    </SkiaPath>
+                    <SkiaPath path={currentPath.path} color="#FFFFFF" style="stroke" strokeWidth={currentPath.strokeWidth * 0.4} strokeCap="round" strokeJoin="round" />
+                  </Group>
+                ) : (
+                  <SkiaPath path={currentPath.path} color={currentPath.color} style="stroke" strokeWidth={currentPath.strokeWidth} strokeCap="round" strokeJoin="round" />
+                )}
+              </React.Fragment>
             )}
           </Canvas>
         </View>
@@ -707,7 +744,7 @@ const VeTranhGameNative = ({ mode, setMode, selectedBg, setSelectedBg, onBack, a
 };
 
 // =========================================================
-// KHUNG ĐIỀU HƯỚNG CHUNG CHO GAME VẼ TRANH (TÈO THÊM ẢNH TỪ KHO VÀO ĐÂY)
+// KHUNG ĐIỀU HƯỚNG CHUNG CHO GAME VẼ TRANH 
 // =========================================================
 const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
   const [allToMau, setAllToMau] = useState<any[]>([]);
