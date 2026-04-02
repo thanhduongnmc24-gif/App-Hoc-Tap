@@ -7,6 +7,7 @@ import { supabase } from '../../utils/supabaseConfig';
 import { Video, ResizeMode, Audio } from 'expo-av';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import LottieView from 'lottie-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Slider from '@react-native-community/slider';
 
 import { Canvas, Path as SkiaPath, Skia, DashPathEffect, BlurMask } from '@shopify/react-native-skia';
@@ -16,7 +17,7 @@ import { KHO_DONG_VAT } from '../../constants/kho_dong_vat';
 import { LOTTIE_ANIMALS } from '../../constants/kho_lottie';
 import { THU_THACH_IMAGES } from '../../constants/kho_anh';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const KHO_ANH_TO_MAU: any[] = [];
 const BUBBLE_COLORS = ['#EF4444', '#F97316', '#FBBF24', '#22C55E', '#3B82F6', '#A855F7', '#EC4899', '#000000', '#FFFFFF'];
 
@@ -100,10 +101,7 @@ const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () =
         {videoState === 'idle' ? (
           <Image source={currentAnimal.image} style={styles.animalMedia} resizeMode="cover" />
         ) : (
-          <Video
-            source={videoState === 'eating' ? currentAnimal.videoAn : currentAnimal.videoKhoc}
-            style={styles.animalMedia} resizeMode={ResizeMode.COVER} shouldPlay onPlaybackStatusUpdate={handleVideoFinish}
-          />
+          <Video source={videoState === 'eating' ? currentAnimal.videoAn : currentAnimal.videoKhoc} style={styles.animalMedia} resizeMode={ResizeMode.COVER} shouldPlay onPlaybackStatusUpdate={handleVideoFinish} />
         )}
       </View>
       <View style={styles.problemBoard}>
@@ -417,19 +415,40 @@ const DapThuGame = ({ onBack }: { onBack: () => void }) => {
 };
 
 // ==========================================
-// GAME 4: THỬ THÁCH VUI NHỘN (SLOT MACHINE)
+// GAME 4: THỬ THÁCH VUI NHỘN (TÈO THÊM ẢNH TỪ KHO VÀO ĐÂY)
 // ==========================================
 const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
-  const KHO_THU_THACH = THU_THACH_IMAGES.map((img, index) => ({ id: index, image: img }));
+  const [allThuThach, setAllThuThach] = useState<any[]>([]);
   const [isSpinning, setIsSpinning] = useState(false);
   const [showCard, setShowCard] = useState(false);
   const [currentImg, setCurrentImg] = useState<any>(null);
-  const [lastImgId, setLastImgId] = useState<number | null>(null);
+  const [lastImgId, setLastImgId] = useState<string | null>(null);
+  
   const bounceAnim = useRef(new Animated.Value(1)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useFocusEffect(useCallback(() => {
+    const load = async () => {
+      let custom: any[] = [];
+      try {
+        const stored = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.thu_thach) {
+             custom = parsed.thu_thach.map((item:any, index:number) => ({ 
+               id: 'custom_'+index, image: {uri: item.uri} 
+             }));
+          }
+        }
+      } catch (e) {}
+      const base = THU_THACH_IMAGES.map((img, index) => ({ id: 'base_'+index, image: img }));
+      setAllThuThach([...base, ...custom]);
+    };
+    load();
+  }, []));
+
   const startSpin = () => {
-    if (isSpinning) return;
+    if (isSpinning || allThuThach.length === 0) return;
     setIsSpinning(true); setShowCard(true);
     let speed = 50;  
     let spins = 0;
@@ -437,14 +456,16 @@ const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
 
     const spin = () => {
       spins++;
-      setCurrentImg(KHO_THU_THACH[Math.floor(Math.random() * KHO_THU_THACH.length)]);
+      setCurrentImg(allThuThach[Math.floor(Math.random() * allThuThach.length)]);
       if (spins < maxSpins) {
         speed += 15; 
         timeoutRef.current = setTimeout(spin, speed);
       } else {
-        let finalIdx = Math.floor(Math.random() * KHO_THU_THACH.length);
-        while (KHO_THU_THACH.length > 1 && KHO_THU_THACH[finalIdx].id === lastImgId) finalIdx = Math.floor(Math.random() * KHO_THU_THACH.length);
-        const finalImage = KHO_THU_THACH[finalIdx];
+        let finalIdx = Math.floor(Math.random() * allThuThach.length);
+        while (allThuThach.length > 1 && allThuThach[finalIdx].id === lastImgId) {
+           finalIdx = Math.floor(Math.random() * allThuThach.length);
+        }
+        const finalImage = allThuThach[finalIdx];
         setCurrentImg(finalImage); setLastImgId(finalImage.id); setIsSpinning(false);
         Animated.sequence([ Animated.timing(bounceAnim, { toValue: 1.1, duration: 150, useNativeDriver: true }), Animated.spring(bounceAnim, { toValue: 1, friction: 3, useNativeDriver: true }) ]).start();
       }
@@ -466,7 +487,10 @@ const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
             {isSpinning && <View style={styles.spinningOverlay} />}
           </Animated.View>
         ) : (
-          <View style={[styles.challengeCard, styles.cardPlaceholder]}><Text style={{ fontSize: 100 }}>❓</Text><Text style={{ fontSize: 20, color: '#EA580C', fontWeight: 'bold', marginTop: 10 }}>Bé sẵn sàng chưa?</Text></View>
+          <View style={[styles.challengeCard, styles.cardPlaceholder]}>
+             <Text style={{ fontSize: 100 }}>❓</Text>
+             <Text style={{ fontSize: 20, color: '#EA580C', fontWeight: 'bold', marginTop: 10 }}>Bé sẵn sàng chưa?</Text>
+          </View>
         )}
       </View>
       <View style={styles.thuThachControls}>
@@ -485,7 +509,7 @@ const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
 // =========================================================
 // GAME 5A: BÉ TẬP VẼ - PHIÊN BẢN CHẠY TRÊN WEB (DÙNG SVG)
 // =========================================================
-const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack }: any) => {
+const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allToMau }: any) => {
   const [paths, setPaths] = useState<any[]>([]);
   const [currentPath, setCurrentPath] = useState<any>(null);
   const [currentColor, setCurrentColor] = useState('#EF4444');
@@ -494,6 +518,26 @@ const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack }: an
 
   const undoLastPath = () => setPaths((prev) => prev.slice(0, -1));
   const clearAllPaths = () => setPaths([]);
+
+  if (mode === 'select_bg') {
+    return (
+      <View style={[styles.gameContainer, { backgroundColor: '#EFF6FF' }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => setMode('menu')}><Ionicons name="arrow-back-circle" size={50} color="#3B82F6" /></TouchableOpacity>
+        <Text style={[styles.drawMenuTitle, { marginTop: 80, color: '#1D4ED8' }]}>Chọn hình để tô màu nha</Text>
+        {allToMau.length === 0 ? (
+          <Text style={{ textAlign: 'center', marginTop: 50, fontSize: 18, color: 'gray' }}>Anh hai chưa thêm ảnh Tô Màu nào trong Cài Đặt kìa!</Text>
+        ) : (
+          <ScrollView contentContainerStyle={styles.bgSelectorGrid}>
+            {allToMau.map((img: any, idx: number) => (
+              <TouchableOpacity key={idx} style={styles.bgThumbnail} onPress={() => { setSelectedBg(img); setMode('drawing'); }}>
+                <Image source={img} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.gameContainer, { backgroundColor: '#E5E7EB' }]}>
@@ -560,9 +604,8 @@ const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack }: an
 
 // =========================================================
 // GAME 5B: BÉ TẬP VẼ - PHIÊN BẢN CHẠY TRÊN ĐIỆN THOẠI (DÙNG SKIA)
-// Đã đồng bộ bộ bắt sự kiện vuốt y chang bản Web!
 // =========================================================
-const VeTranhGameNative = ({ mode, setMode, selectedBg, setSelectedBg, onBack }: any) => {
+const VeTranhGameNative = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allToMau }: any) => {
   const [paths, setPaths] = useState<any[]>([]);
   const [currentPath, setCurrentPath] = useState<any>(null);
   const [currentColor, setCurrentColor] = useState('#EF4444');
@@ -571,6 +614,26 @@ const VeTranhGameNative = ({ mode, setMode, selectedBg, setSelectedBg, onBack }:
 
   const undoLastPath = () => setPaths((prev) => prev.slice(0, -1));
   const clearAllPaths = () => setPaths([]);
+
+  if (mode === 'select_bg') {
+    return (
+      <View style={[styles.gameContainer, { backgroundColor: '#EFF6FF' }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => setMode('menu')}><Ionicons name="arrow-back-circle" size={50} color="#3B82F6" /></TouchableOpacity>
+        <Text style={[styles.drawMenuTitle, { marginTop: 80, color: '#1D4ED8' }]}>Chọn hình để tô màu nha</Text>
+        {allToMau.length === 0 ? (
+          <Text style={{ textAlign: 'center', marginTop: 50, fontSize: 18, color: 'gray' }}>Anh hai chưa thêm ảnh Tô Màu nào trong Cài Đặt kìa!</Text>
+        ) : (
+          <ScrollView contentContainerStyle={styles.bgSelectorGrid}>
+            {allToMau.map((img: any, idx: number) => (
+              <TouchableOpacity key={idx} style={styles.bgThumbnail} onPress={() => { setSelectedBg(img); setMode('drawing'); }}>
+                <Image source={img} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.gameContainer, { backgroundColor: '#E5E7EB' }]}>
@@ -585,7 +648,6 @@ const VeTranhGameNative = ({ mode, setMode, selectedBg, setSelectedBg, onBack }:
 
       <View style={styles.canvasArea}>
         {selectedBg && <Image source={selectedBg} style={StyleSheet.absoluteFillObject} resizeMode="contain" />}
-        {/* TÈO SỬA LỖI KHÔNG VẼ ĐƯỢC TRÊN MOBILE Ở ĐÂY */}
         <View style={StyleSheet.absoluteFillObject} 
           onStartShouldSetResponder={() => true}
           onMoveShouldSetResponder={() => true}
@@ -645,11 +707,27 @@ const VeTranhGameNative = ({ mode, setMode, selectedBg, setSelectedBg, onBack }:
 };
 
 // =========================================================
-// KHUNG ĐIỀU HƯỚNG CHUNG CHO GAME VẼ TRANH
+// KHUNG ĐIỀU HƯỚNG CHUNG CHO GAME VẼ TRANH (TÈO THÊM ẢNH TỪ KHO VÀO ĐÂY)
 // =========================================================
 const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
+  const [allToMau, setAllToMau] = useState<any[]>([]);
   const [mode, setMode] = useState<'menu' | 'select_bg' | 'drawing'>('menu');
   const [selectedBg, setSelectedBg] = useState<any>(null);
+
+  useFocusEffect(useCallback(() => {
+    const load = async () => {
+      let custom: any[] = [];
+      try {
+        const stored = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.to_mau) custom = parsed.to_mau.map((item:any) => ({ uri: item.uri }));
+        }
+      } catch (e) {}
+      setAllToMau([...KHO_ANH_TO_MAU, ...custom]);
+    };
+    load();
+  }, []));
 
   if (mode === 'menu') {
     return (
@@ -662,28 +740,10 @@ const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
     );
   }
 
-  if (mode === 'select_bg') {
-    return (
-      <View style={[styles.gameContainer, { backgroundColor: '#EFF6FF' }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => setMode('menu')}><Ionicons name="arrow-back-circle" size={50} color="#3B82F6" /></TouchableOpacity>
-        <Text style={[styles.drawMenuTitle, { marginTop: 80, color: '#1D4ED8' }]}>Chọn hình để tô màu nha</Text>
-        {KHO_ANH_TO_MAU.length === 0 ? (
-          <Text style={{ textAlign: 'center', marginTop: 50, fontSize: 18, color: 'gray' }}>Anh hai chưa thêm ảnh vào KHO_ANH_TO_MAU nè!</Text>
-        ) : (
-          <ScrollView contentContainerStyle={styles.bgSelectorGrid}>
-            {KHO_ANH_TO_MAU.map((img, idx) => (
-              <TouchableOpacity key={idx} style={styles.bgThumbnail} onPress={() => { setSelectedBg(img); setMode('drawing'); }}><Image source={img} style={{ width: '100%', height: '100%' }} resizeMode="contain" /></TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
-      </View>
-    );
-  }
-
   if (Platform.OS === 'web') {
-    return <VeTranhGameWeb mode={mode} setMode={setMode} selectedBg={selectedBg} setSelectedBg={setSelectedBg} onBack={onBack} />;
+    return <VeTranhGameWeb mode={mode} setMode={setMode} selectedBg={selectedBg} setSelectedBg={setSelectedBg} onBack={onBack} allToMau={allToMau} />;
   } else {
-    return <VeTranhGameNative mode={mode} setMode={setMode} selectedBg={selectedBg} setSelectedBg={setSelectedBg} onBack={onBack} />;
+    return <VeTranhGameNative mode={mode} setMode={setMode} selectedBg={selectedBg} setSelectedBg={setSelectedBg} onBack={onBack} allToMau={allToMau} />;
   }
 };
 
