@@ -8,7 +8,7 @@ import { useFonts } from 'expo-font';
 import { Video, ResizeMode, Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Import kho tập đọc
+// Import kho tập đọc (Mặc định)
 import { TAP_DOC_DATA } from '../../constants/kho_tap_doc';
 // Import kho video để thưởng cho bé
 import { GIOI_VIDEOS, TOT_VIDEOS, CAN_CO_GAN_VIDEOS } from '../../constants/kho_video';
@@ -134,24 +134,22 @@ const GhepVanGame = ({ onBack }: { onBack: () => void }) => {
 };
 
 // ==========================================
-// MODULE 2: BÉ TẬP ĐỌC
-// ==========================================
-// ==========================================
-// MODULE 2: BÉ TẬP ĐỌC (CÔ GOOGLE CHUẨN XỊN 100% 🔊)
+// MODULE 2: BÉ TẬP ĐỌC (CÓ TRỘN ẢNH TỪ CÀI ĐẶT)
 // ==========================================
 const TapDocGame = ({ onBack }: { onBack: () => void }) => {
   const { colors } = useTheme();
   const [childName, setChildName] = useState('Bé yêu');
   const [currentItem, setCurrentItem] = useState<any>(null);
-  const unseenItems = useRef(TAP_DOC_DATA ? [...TAP_DOC_DATA] : []);
+  
+  // Tèo tạo biến state lưu TẤT CẢ data (mặc định + anh hai thêm)
+  const [allData, setAllData] = useState<any[]>([]);
+  const unseenItems = useRef<any[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       fetchChildName();
-      if (TAP_DOC_DATA && TAP_DOC_DATA.length > 0 && !currentItem) {
-        handleNextItem();
-      }
-    }, [currentItem])
+      loadAllData(); // Gọi hàm tải ảnh mỗi khi vào màn hình này
+    }, [])
   );
 
   const fetchChildName = async () => {
@@ -161,30 +159,62 @@ const TapDocGame = ({ onBack }: { onBack: () => void }) => {
     } catch (e) {}
   };
 
-  const handleNextItem = () => {
-    if (!TAP_DOC_DATA || TAP_DOC_DATA.length === 0) return;
-    if (unseenItems.current.length === 0) unseenItems.current = [...TAP_DOC_DATA];
-    const randomIndex = Math.floor(Math.random() * unseenItems.current.length);
-    const selected = unseenItems.current[randomIndex];
-    unseenItems.current.splice(randomIndex, 1);
+  const loadAllData = async () => {
+    let customTapDoc: any[] = [];
+    try {
+      // Lôi data từ kho ra
+      const storedData = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
+      if (storedData) {
+        const parsed = JSON.parse(storedData);
+        // Chỉ bưng danh mục "tap_doc"
+        if (parsed.tap_doc && parsed.tap_doc.length > 0) {
+          // Chế lại data cho giống cấu trúc TAP_DOC_DATA mặc định
+          customTapDoc = parsed.tap_doc.map((item: any) => ({
+            image: { uri: item.uri },
+            word: item.name
+          }));
+        }
+      }
+    } catch (e) {
+      console.log('Lỗi lấy ảnh tập đọc tùy chỉnh:', e);
+    }
+
+    // Trộn chung ảnh mặc định và ảnh anh hai thêm
+    const combinedData = [...(TAP_DOC_DATA || []), ...customTapDoc];
+    setAllData(combinedData);
+
+    // Nếu chưa hiển thị ảnh nào thì bốc 1 tấm ra
+    if (combinedData.length > 0 && !currentItem) {
+      unseenItems.current = [...combinedData];
+      pickNext(combinedData, [...combinedData]);
+    }
+  };
+
+  const pickNext = (fullList: any[], currentUnseen: any[]) => {
+    if (fullList.length === 0) return;
+    if (currentUnseen.length === 0) {
+        currentUnseen = [...fullList];
+    }
+    const randomIndex = Math.floor(Math.random() * currentUnseen.length);
+    const selected = currentUnseen[randomIndex];
+    currentUnseen.splice(randomIndex, 1);
+    unseenItems.current = currentUnseen;
     setCurrentItem(selected);
+  };
+
+  const handleNextItem = () => {
+    pickNext(allData, unseenItems.current);
   };
 
   // Hàm mời chị Google xịn về đọc
   const handleSpeak = async () => {
     if (currentItem && currentItem.word) {
       try {
-        // Tèo lấy chữ bé đang học, nhét vào link của Google Dịch để lấy đúng cái giọng chuẩn đó về
         const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(currentItem.word)}&tl=vi&client=tw-ob`;
-        
         const { sound } = await Audio.Sound.createAsync({ uri: url });
         await sound.playAsync();
-        
-        // Hát xong là dọn dẹp bộ nhớ ngay cho nhẹ máy
         sound.setOnPlaybackStatusUpdate((status: any) => {
-          if (status.isLoaded && status.didJustFinish) {
-            sound.unloadAsync();
-          }
+          if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
         });
       } catch (error) {
         console.log("Lỗi mời chị Google:", error);
@@ -202,7 +232,7 @@ const TapDocGame = ({ onBack }: { onBack: () => void }) => {
       </View>
 
       <View style={styles.td_mainContent}>
-        {!TAP_DOC_DATA || TAP_DOC_DATA.length === 0 ? (
+        {allData.length === 0 ? (
           <View style={styles.td_emptyContainer}>
             <Ionicons name="images-outline" size={80} color="#9CA3AF" />
             <Text style={styles.td_emptyText}>Kho ảnh đang trống trơn!</Text>
@@ -238,7 +268,7 @@ const TapDocGame = ({ onBack }: { onBack: () => void }) => {
 };
 
 // ==========================================
-// MODULE 3: NỐI TỪ CÙNG BÉ
+// MODULE 3: NỐI TỪ CÙNG BÉ (CÓ TRỘN ẢNH TỪ CÀI ĐẶT)
 // ==========================================
 const LINE_COLORS = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
 
@@ -267,12 +297,32 @@ const BaiTapGame = ({ onBack }: { onBack: () => void }) => {
 
   useFocusEffect(useCallback(() => { startNewGame(); }, []));
 
-  const startNewGame = () => {
-    if (!TAP_DOC_DATA || TAP_DOC_DATA.length < 5) {
-      Alert.alert('Thiếu dữ liệu', 'Đại ca nạp thêm hình vào kho Tập Đọc cho đủ 5 tấm rồi chơi nha!');
+  const startNewGame = async () => {
+    // Tèo cũng lôi ảnh từ cài đặt ra cho game nối chữ luôn
+    let customTapDoc: any[] = [];
+    try {
+      const storedData = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
+      if (storedData) {
+        const parsed = JSON.parse(storedData);
+        if (parsed.tap_doc && parsed.tap_doc.length > 0) {
+          customTapDoc = parsed.tap_doc.map((item: any) => ({
+            image: { uri: item.uri },
+            word: item.name
+          }));
+        }
+      }
+    } catch (e) {
+      console.log('Lỗi lấy ảnh nối từ tùy chỉnh:', e);
+    }
+
+    const combinedData = [...(TAP_DOC_DATA || []), ...customTapDoc];
+
+    if (!combinedData || combinedData.length < 5) {
+      Alert.alert('Thiếu dữ liệu', 'Đại ca nạp thêm hình vào kho Tập Đọc (ít nhất 5 tấm) rồi chơi nha!');
       return;
     }
-    let shuffled = [...TAP_DOC_DATA].sort(() => 0.5 - Math.random());
+
+    let shuffled = [...combinedData].sort(() => 0.5 - Math.random());
     let selected = shuffled.slice(0, 5);
     setLeftItems([...selected].sort(() => 0.5 - Math.random()));
     setRightItems([...selected].sort(() => 0.5 - Math.random()));
@@ -498,7 +548,6 @@ export default function TiengVietHubScreen() {
   const { colors } = useTheme();
   const [currentView, setCurrentView] = useState<'menu' | 'ghep_van' | 'tap_doc' | 'bai_tap'>('menu');
   
-  // Tèo phải gọi Font một lần ở đây để đảm bảo tất cả các game bên trong đều xài được font chữ Tiểu Học
   const [fontsLoaded] = useFonts({
     'HP001': require('../../assets/fonts/HP001.ttf'), 
   });
@@ -545,24 +594,19 @@ export default function TiengVietHubScreen() {
 }
 
 // ==========================================
-// TỔNG HỢP GIAO DIỆN (TÈO ĐÃ QUY HOẠCH KỸ LƯỠNG KHÔNG SỢ ĐỤNG HÀNG)
+// TỔNG HỢP GIAO DIỆN
 // ==========================================
 const styles = StyleSheet.create({
-  // UI Dùng chung
   container: { flex: 1 },
   header: { paddingVertical: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderBottomWidth: 3 },
   title: { fontSize: 30, fontWeight: '900' },
   backBtn: { position: 'absolute', left: 20, zIndex: 10 },
   
-  // UI Menu Hub
   menuContainer: { flex: 1, padding: 20, justifyContent: 'center', alignItems: 'center' },
   menuCard: { width: '90%', maxWidth: 400, flexDirection: 'row', alignItems: 'center', padding: 20, marginBottom: 20, borderRadius: 25, borderWidth: 4, elevation: 5 },
   menuIcon: { fontSize: 60, marginRight: 20 },
   menuTitle: { fontSize: 26, fontWeight: '900' },
 
-  // ====================
-  // UI GAME 1: Ghép Vần
-  // ====================
   gv_mainContent: { flex: 1, flexDirection: 'row' },
   gv_leftColumn: { width: 100, borderRightWidth: 2, backgroundColor: 'rgba(0,0,0,0.02)' },
   gv_leftScroll: { padding: 10, paddingBottom: 30 },
@@ -577,9 +621,6 @@ const styles = StyleSheet.create({
   gv_wordBox: { paddingHorizontal: 15, paddingVertical: 5, alignItems: 'center', justifyContent: 'center' },
   gv_wordText: { fontSize: 60, fontFamily: 'HP001' },
 
-  // ====================
-  // UI GAME 2: Tập Đọc
-  // ====================
   td_mainContent: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   td_imageCard: { width: width * 0.4, height: width * 0.4, borderRadius: 25, borderWidth: 4, overflow: 'hidden', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 5, marginBottom: 30, alignItems: 'center', justifyContent: 'center' },
   td_imageSquare: { width: '100%', height: '100%' },
@@ -591,9 +632,6 @@ const styles = StyleSheet.create({
   td_emptyText: { fontSize: 24, fontWeight: 'bold', color: '#4B5563', marginTop: 15, marginBottom: 10 },
   td_emptySubText: { fontSize: 16, color: '#6B7280', textAlign: 'center' },
 
-  // ====================
-  // UI GAME 3: Bài Tập Nối Chữ
-  // ====================
   bt_gameArea: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', padding: 10, backgroundColor: '#F9FAFB' },
   bt_column: { width: '40%', justifyContent: 'space-around', zIndex: 10 },
   bt_itemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', height: 180 },
@@ -610,5 +648,4 @@ const styles = StyleSheet.create({
   bt_smallVideo: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   bt_skipVideoBtn: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(255,255,255,0.3)', width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', zIndex: 10 },
   bt_skipVideoText: { color: 'white', fontSize: 18, fontWeight: 'bold' }
-
 });
