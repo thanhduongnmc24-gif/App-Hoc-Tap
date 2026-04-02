@@ -1,43 +1,78 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert, ActivityIndicator, Modal, Image, TextInput, Dimensions } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 
+// Thư viện mới cho vụ thêm ảnh
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const { width } = Dimensions.get('window');
+
 // Định nghĩa các loại phép tính cho rõ ràng
 type MathType = 'cong' | 'tru' | 'ca_hai';
+
+// Định nghĩa kiểu dữ liệu cho Kho Ảnh/Video
+type MediaType = 'to_mau' | 'tinh_diem' | 'tap_doc' | 'thu_thach';
+interface CustomMedia {
+  id: string;
+  uri: string;
+  name: string;
+  category: MediaType;
+  type: 'image' | 'video';
+}
+
+const CATEGORY_NAMES = {
+  to_mau: '🎨 Ảnh Tô Màu',
+  tinh_diem: '💯 Ảnh Tính Điểm',
+  tap_doc: '📚 Ảnh Tập Đọc',
+  thu_thach: '🎲 Ảnh Thử Thách',
+};
 
 export default function SettingsScreen() {
   const { colors, theme, toggleTheme } = useTheme(); 
   const [maxLimit, setMaxLimit] = useState(10);
-  const [mathType, setMathType] = useState<MathType>('ca_hai'); // Mặc định là cả hai
+  const [mathType, setMathType] = useState<MathType>('ca_hai'); 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const isDarkMode = theme === 'dark';
 
+  // --- STATE CHO KHO DỮ LIỆU CỦA BÉ ---
+  const [mediaData, setMediaData] = useState<Record<MediaType, CustomMedia[]>>({
+    to_mau: [], tinh_diem: [], tap_doc: [], thu_thach: []
+  });
+  
+  // Quản lý Modal Danh sách ảnh
+  const [activeCategory, setActiveCategory] = useState<MediaType | null>(null);
+  
+  // Quản lý Modal Chi tiết 1 ảnh (để đổi tên / xóa)
+  const [selectedItem, setSelectedItem] = useState<CustomMedia | null>(null);
+  const [editName, setEditName] = useState('');
+
   useEffect(() => {
     fetchSettings();
+    loadCustomMedia();
   }, []);
 
+  // ==========================================
+  // XỬ LÝ CÀI ĐẶT TOÁN HỌC (CŨ)
+  // ==========================================
   const fetchSettings = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data, error } = await supabase
-          .from('be_hoc_toan_data')
-          .select('max_limit, loai_phep_tinh')
-          .eq('user_id', user.id)
-          .single();
-
+        const { data } = await supabase.from('be_hoc_toan_data').select('max_limit, loai_phep_tinh').eq('user_id', user.id).single();
         if (data) {
           setMaxLimit(data.max_limit || 10);
           setMathType((data.loai_phep_tinh as MathType) || 'ca_hai');
         }
       }
     } catch (error) {
-      console.error('Lỗi lấy cài đặt:', error);
+      console.log('Lỗi lấy cài đặt Supabase:', error);
     } finally {
       setLoading(false);
     }
@@ -48,15 +83,7 @@ export default function SettingsScreen() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { error } = await supabase
-          .from('be_hoc_toan_data')
-          .update({ 
-            max_limit: newLimit, 
-            loai_phep_tinh: newType 
-          })
-          .eq('user_id', user.id);
-
-        if (error) throw error;
+        await supabase.from('be_hoc_toan_data').update({ max_limit: newLimit, loai_phep_tinh: newType }).eq('user_id', user.id);
       }
     } catch (error) {
       Alert.alert('Lỗi', 'Không lưu được cài đặt rồi anh hai ơi!');
@@ -64,6 +91,116 @@ export default function SettingsScreen() {
       setSaving(false);
     }
   };
+
+  // ==========================================
+  // XỬ LÝ KHO DỮ LIỆU CỦA BÉ (MỚI)
+  // ==========================================
+  const loadCustomMedia = async () => {
+    try {
+      const storedData = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
+      if (storedData) {
+        setMediaData(JSON.parse(storedData));
+      }
+    } catch (error) {
+      console.log('Lỗi tải dữ liệu nội bộ:', error);
+    }
+  };
+
+  const saveCustomMedia = async (newData: Record<MediaType, CustomMedia[]>) => {
+    try {
+      await AsyncStorage.setItem('@kho_du_lieu_cua_be', JSON.stringify(newData));
+      setMediaData(newData);
+    } catch (error) {
+      Alert.alert('Lỗi', 'Không lưu được ảnh vào bộ nhớ máy!');
+    }
+  };
+
+  const handleAddMedia = async () => {
+    if (!activeCategory) return;
+
+    // Yêu cầu quyền truy cập thư viện ảnh
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permissionResult.granted === false) {
+      Alert.alert("Cấp quyền", "Anh hai cho Tèo xin quyền vào kho ảnh mới lấy hình được nha!");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: false,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      const fileName = asset.uri.split('/').pop() || `file_${Date.now()}`;
+      
+      // TÈO ĐÃ SỬA LỖI TYPESCRIPT Ở ĐÂY NÈ ANH HAI
+      const safeDocDir = (FileSystem as any).documentDirectory || '';
+      const newPath = `${safeDocDir}${fileName}`;
+
+      try {
+        await FileSystem.copyAsync({ from: asset.uri, to: newPath });
+        
+        const newItem: CustomMedia = {
+          id: Date.now().toString(),
+          uri: newPath,
+          name: `Ảnh/Video ${mediaData[activeCategory].length + 1}`,
+          category: activeCategory,
+          type: asset.type === 'video' ? 'video' : 'image',
+        };
+
+        const updatedData = { ...mediaData, [activeCategory]: [...mediaData[activeCategory], newItem] };
+        await saveCustomMedia(updatedData);
+
+      } catch (error) {
+        Alert.alert('Lỗi', 'Lưu file thất bại. Anh hai thử lại xem!');
+      }
+    }
+  };
+
+  const handleRename = async () => {
+    if (!selectedItem || !editName.trim()) return;
+
+    const updatedCategoryList = mediaData[selectedItem.category].map(item => 
+      item.id === selectedItem.id ? { ...item, name: editName.trim() } : item
+    );
+
+    const updatedData = { ...mediaData, [selectedItem.category]: updatedCategoryList };
+    await saveCustomMedia(updatedData);
+    
+    // Cập nhật lại UI đang xem
+    setSelectedItem({ ...selectedItem, name: editName.trim() });
+    Alert.alert('Thành công', 'Đã đổi tên mượt mà!');
+  };
+
+  const handleDelete = async () => {
+    if (!selectedItem) return;
+
+    Alert.alert("Xóa Dữ Liệu", "Anh hai có chắc muốn xóa file này không?", [
+      { text: "Hủy", style: "cancel" },
+      { 
+        text: "Xóa Trắng", 
+        style: "destructive",
+        onPress: async () => {
+          try {
+            // TÈO CŨNG TRẢ LẠI HÀM GỐC Ở ĐÂY NHA
+            await FileSystem.deleteAsync(selectedItem.uri, { idempotent: true });
+            
+            // Xóa khỏi danh sách
+            const updatedCategoryList = mediaData[selectedItem.category].filter(item => item.id !== selectedItem.id);
+            const updatedData = { ...mediaData, [selectedItem.category]: updatedCategoryList };
+            
+            await saveCustomMedia(updatedData);
+            setSelectedItem(null); // Đóng modal chi tiết
+          } catch (error) {
+            Alert.alert("Lỗi", "Không xóa được file rồi!");
+          }
+        }
+      }
+    ]);
+  };
+
 
   if (loading) {
     return (
@@ -80,6 +217,29 @@ export default function SettingsScreen() {
         {saving && <ActivityIndicator size="small" color="#4F46E5" />}
       </View>
 
+      {/* --- KHO DỮ LIỆU CỦA BÉ (MỚI THÊM) --- */}
+      <View style={[styles.section, { backgroundColor: '#F0FDF4', borderColor: '#86EFAC', borderWidth: 2 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15 }}>
+          <Text style={{ fontSize: 24, marginRight: 10 }}>🎁</Text>
+          <View>
+            <Text style={[styles.sectionTitle, { color: '#166534', marginBottom: 0 }]}>Kho Dữ Liệu Của Bé</Text>
+            <Text style={{ color: '#15803D', fontSize: 12 }}>Thêm ảnh/video gia đình vào game</Text>
+          </View>
+        </View>
+
+        <View style={styles.mediaGrid}>
+          {(Object.keys(CATEGORY_NAMES) as MediaType[]).map((key) => (
+            <TouchableOpacity key={key} style={styles.mediaCategoryBtn} onPress={() => setActiveCategory(key)}>
+              <Text style={styles.mediaCategoryTitle}>{CATEGORY_NAMES[key]}</Text>
+              <View style={styles.mediaBadge}>
+                <Text style={styles.mediaBadgeText}>{mediaData[key].length}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* --- GIAO DIỆN --- */}
       <View style={[styles.section, { backgroundColor: colors.card }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Giao diện</Text>
         <View style={styles.row}>
@@ -91,51 +251,32 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+      {/* --- PHẠM VI TOÁN --- */}
       <View style={[styles.section, { backgroundColor: colors.card }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Phạm vi con số</Text>
         <View style={styles.sliderContainer}>
           <Text style={[styles.sliderValue, { color: "#4F46E5" }]}>Trong phạm vi: {maxLimit}</Text>
           <Slider
-            style={{ width: '100%', height: 40 }}
-            minimumValue={5}
-            maximumValue={100}
-            step={5}
-            value={maxLimit}
-            onValueChange={setMaxLimit}
-            onSlidingComplete={(val: number) => updateSettings(val, mathType)}
-            minimumTrackTintColor="#4F46E5"
-            maximumTrackTintColor="#D1D5DB"
-            thumbTintColor="#4F46E5"
+            style={{ width: '100%', height: 40 }} minimumValue={5} maximumValue={100} step={5} value={maxLimit}
+            onValueChange={setMaxLimit} onSlidingComplete={(val: number) => updateSettings(val, mathType)}
+            minimumTrackTintColor="#4F46E5" maximumTrackTintColor="#D1D5DB" thumbTintColor="#4F46E5"
           />
           <Text style={styles.hint}>Bé sẽ làm toán với các con số từ 1 đến {maxLimit}</Text>
         </View>
       </View>
 
+      {/* --- LOẠI PHÉP TÍNH --- */}
       <View style={[styles.section, { backgroundColor: colors.card }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Loại phép tính</Text>
         <View style={styles.typeContainer}>
-          <TouchableOpacity 
-            style={[styles.typeBtn, mathType === 'cong' && styles.typeBtnActive, { borderColor: colors.border }]}
-            onPress={() => { setMathType('cong'); updateSettings(maxLimit, 'cong'); }}
-          >
-            <Text style={styles.typeEmoji}>➕</Text>
-            <Text style={[styles.typeText, mathType === 'cong' && styles.typeTextActive]}>Phép Cộng</Text>
+          <TouchableOpacity style={[styles.typeBtn, mathType === 'cong' && styles.typeBtnActive, { borderColor: colors.border }]} onPress={() => { setMathType('cong'); updateSettings(maxLimit, 'cong'); }}>
+            <Text style={styles.typeEmoji}>➕</Text><Text style={[styles.typeText, mathType === 'cong' && styles.typeTextActive]}>Phép Cộng</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.typeBtn, mathType === 'tru' && styles.typeBtnActive, { borderColor: colors.border }]}
-            onPress={() => { setMathType('tru'); updateSettings(maxLimit, 'tru'); }}
-          >
-            <Text style={styles.typeEmoji}>➖</Text>
-            <Text style={[styles.typeText, mathType === 'tru' && styles.typeTextActive]}>Phép Trừ</Text>
+          <TouchableOpacity style={[styles.typeBtn, mathType === 'tru' && styles.typeBtnActive, { borderColor: colors.border }]} onPress={() => { setMathType('tru'); updateSettings(maxLimit, 'tru'); }}>
+            <Text style={styles.typeEmoji}>➖</Text><Text style={[styles.typeText, mathType === 'tru' && styles.typeTextActive]}>Phép Trừ</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.typeBtn, mathType === 'ca_hai' && styles.typeBtnActive, { borderColor: colors.border }]}
-            onPress={() => { setMathType('ca_hai'); updateSettings(maxLimit, 'ca_hai'); }}
-          >
-            <Text style={styles.typeEmoji}>🎲</Text>
-            <Text style={[styles.typeText, mathType === 'ca_hai' && styles.typeTextActive]}>Cả Hai</Text>
+          <TouchableOpacity style={[styles.typeBtn, mathType === 'ca_hai' && styles.typeBtnActive, { borderColor: colors.border }]} onPress={() => { setMathType('ca_hai'); updateSettings(maxLimit, 'ca_hai'); }}>
+            <Text style={styles.typeEmoji}>🎲</Text><Text style={[styles.typeText, mathType === 'ca_hai' && styles.typeTextActive]}>Cả Hai</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -144,6 +285,72 @@ export default function SettingsScreen() {
         <Text style={styles.footerText}>Phiên bản 1.0.0</Text>
         <Text style={styles.footerText}>Lưu trữ an toàn trên Supabase 🚀</Text>
       </View>
+
+      {/* ======================================================= */}
+      {/* MODAL 1: HIỂN THỊ DANH SÁCH ẢNH THEO DANH MỤC            */}
+      {/* ======================================================= */}
+      <Modal visible={activeCategory !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveCategory(null)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{activeCategory ? CATEGORY_NAMES[activeCategory] : ''}</Text>
+            <TouchableOpacity onPress={() => setActiveCategory(null)} style={styles.closeBtn}>
+              <Ionicons name="close-circle" size={32} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.galleryGrid}>
+            {/* Nút Thêm Mới */}
+            <TouchableOpacity style={styles.addMediaBtn} onPress={handleAddMedia}>
+              <Ionicons name="add" size={40} color="#4F46E5" />
+              <Text style={{color: '#4F46E5', fontWeight: 'bold', marginTop: 5}}>Thêm mới</Text>
+            </TouchableOpacity>
+
+            {/* Danh sách Ảnh/Video thu nhỏ */}
+            {activeCategory && mediaData[activeCategory].map((item) => (
+              <TouchableOpacity key={item.id} style={styles.thumbContainer} onPress={() => { setSelectedItem(item); setEditName(item.name); }}>
+                <Image source={{ uri: item.uri }} style={styles.thumbImage} />
+                {item.type === 'video' && <Ionicons name="play-circle" size={30} color="white" style={styles.videoIcon} />}
+                <View style={styles.thumbLabelBox}>
+                  <Text style={styles.thumbLabelText} numberOfLines={1}>{item.name}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* ======================================================= */}
+      {/* MODAL 2: CHI TIẾT 1 ẢNH (ĐỂ ĐỔI TÊN / XÓA)              */}
+      {/* ======================================================= */}
+      <Modal visible={selectedItem !== null} transparent={true} animationType="fade" onRequestClose={() => setSelectedItem(null)}>
+        <View style={styles.detailOverlay}>
+          <View style={styles.detailBox}>
+            <TouchableOpacity onPress={() => setSelectedItem(null)} style={styles.detailCloseBtn}>
+              <Ionicons name="close-circle" size={35} color="#EF4444" />
+            </TouchableOpacity>
+
+            {selectedItem && (
+              <>
+                <Image source={{ uri: selectedItem.uri }} style={styles.detailImage} resizeMode="contain" />
+                
+                <Text style={styles.inputLabel}>Tên hiển thị:</Text>
+                <View style={styles.renameRow}>
+                  <TextInput style={styles.nameInput} value={editName} onChangeText={setEditName} placeholder="Nhập tên ảnh..." />
+                  <TouchableOpacity style={styles.saveNameBtn} onPress={handleRename}>
+                    <Text style={styles.saveNameText}>Lưu</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+                  <Ionicons name="trash" size={20} color="white" />
+                  <Text style={styles.deleteBtnText}>Xóa file này</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
     </ScrollView>
   );
 }
@@ -167,5 +374,38 @@ const styles = StyleSheet.create({
   typeText: { fontSize: 12, fontWeight: 'bold', color: '#6B7280' },
   typeTextActive: { color: '#4F46E5' },
   footer: { marginTop: 20, marginBottom: 40, alignItems: 'center' },
-  footerText: { color: '#9CA3AF', fontSize: 14, marginBottom: 5 }
+  footerText: { color: '#9CA3AF', fontSize: 14, marginBottom: 5 },
+
+  // Styles cho Kho dữ liệu
+  mediaGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  mediaCategoryBtn: { width: '48%', backgroundColor: 'white', padding: 15, borderRadius: 15, marginBottom: 10, borderWidth: 1, borderColor: '#BBF7D0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  mediaCategoryTitle: { fontSize: 14, fontWeight: 'bold', color: '#166534', flex: 1 },
+  mediaBadge: { backgroundColor: '#22C55E', borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' },
+  mediaBadgeText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
+
+  // Styles cho Modal Thư viện
+  modalContainer: { flex: 1, backgroundColor: '#F3F4F6' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+  closeBtn: { padding: 5 },
+  galleryGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 10, gap: 10 },
+  addMediaBtn: { width: (width - 40) / 3, height: (width - 40) / 3, backgroundColor: '#E0E7FF', borderRadius: 15, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderStyle: 'dashed', borderColor: '#818CF8' },
+  thumbContainer: { width: (width - 40) / 3, height: (width - 40) / 3, borderRadius: 15, overflow: 'hidden', backgroundColor: 'black' },
+  thumbImage: { width: '100%', height: '100%', opacity: 0.8 },
+  videoIcon: { position: 'absolute', top: '50%', left: '50%', transform: [{translateX: -15}, {translateY: -15}] },
+  thumbLabelBox: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: 'rgba(0,0,0,0.6)', padding: 5 },
+  thumbLabelText: { color: 'white', fontSize: 10, textAlign: 'center', fontWeight: 'bold' },
+
+  // Styles cho Modal Chi tiết
+  detailOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  detailBox: { width: '100%', backgroundColor: 'white', borderRadius: 20, padding: 20, alignItems: 'center' },
+  detailCloseBtn: { position: 'absolute', top: -15, right: -15, backgroundColor: 'white', borderRadius: 20 },
+  detailImage: { width: 250, height: 250, borderRadius: 10, marginBottom: 20, backgroundColor: '#E5E7EB' },
+  inputLabel: { alignSelf: 'flex-start', fontWeight: 'bold', color: '#4B5563', marginBottom: 5 },
+  renameRow: { flexDirection: 'row', width: '100%', marginBottom: 20 },
+  nameInput: { flex: 1, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, paddingHorizontal: 15, paddingVertical: 10, backgroundColor: '#F9FAFB' },
+  saveNameBtn: { backgroundColor: '#4F46E5', paddingHorizontal: 20, justifyContent: 'center', borderRadius: 10, marginLeft: 10 },
+  saveNameText: { color: 'white', fontWeight: 'bold' },
+  deleteBtn: { flexDirection: 'row', backgroundColor: '#EF4444', width: '100%', padding: 15, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  deleteBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 10 }
 });
