@@ -3,18 +3,15 @@ import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert, Ac
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabaseConfig';
 import { Ionicons } from '@expo/vector-icons';
+import Slider from '@react-native-community/slider';
 
-// Thư viện mới cho vụ thêm ảnh
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
-// Định nghĩa các loại phép tính cho rõ ràng
 type MathType = 'cong' | 'tru' | 'ca_hai';
-
-// Định nghĩa kiểu dữ liệu cho Kho Ảnh/Video
 type MediaType = 'to_mau' | 'tinh_diem' | 'tap_doc' | 'thu_thach';
 interface CustomMedia {
   id: string;
@@ -40,15 +37,11 @@ export default function SettingsScreen() {
 
   const isDarkMode = theme === 'dark';
 
-  // --- STATE CHO KHO DỮ LIỆU CỦA BÉ ---
   const [mediaData, setMediaData] = useState<Record<MediaType, CustomMedia[]>>({
     to_mau: [], tinh_diem: [], tap_doc: [], thu_thach: []
   });
   
-  // Quản lý Modal Danh sách ảnh
   const [activeCategory, setActiveCategory] = useState<MediaType | null>(null);
-  
-  // Quản lý Modal Chi tiết 1 ảnh (để đổi tên / xóa)
   const [selectedItem, setSelectedItem] = useState<CustomMedia | null>(null);
   const [editName, setEditName] = useState('');
 
@@ -57,9 +50,6 @@ export default function SettingsScreen() {
     loadCustomMedia();
   }, []);
 
-  // ==========================================
-  // XỬ LÝ CÀI ĐẶT TOÁN HỌC
-  // ==========================================
   const fetchSettings = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -71,7 +61,7 @@ export default function SettingsScreen() {
         }
       }
     } catch (error) {
-      console.log('Lỗi lấy cài đặt Supabase:', error);
+      console.log('Lỗi lấy cài đặt:', error);
     } finally {
       setLoading(false);
     }
@@ -85,24 +75,17 @@ export default function SettingsScreen() {
         await supabase.from('be_hoc_toan_data').update({ max_limit: newLimit, loai_phep_tinh: newType }).eq('user_id', user.id);
       }
     } catch (error) {
-      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được cài đặt rồi anh hai ơi!');
+      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được cài đặt!');
     } finally {
       setSaving(false);
     }
   };
 
-  // ==========================================
-  // XỬ LÝ KHO DỮ LIỆU CỦA BÉ
-  // ==========================================
   const loadCustomMedia = async () => {
     try {
       const storedData = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
-      if (storedData) {
-        setMediaData(JSON.parse(storedData));
-      }
-    } catch (error) {
-      console.log('Lỗi tải dữ liệu nội bộ:', error);
-    }
+      if (storedData) setMediaData(JSON.parse(storedData));
+    } catch (error) {}
   };
 
   const saveCustomMedia = async (newData: Record<MediaType, CustomMedia[]>) => {
@@ -110,7 +93,7 @@ export default function SettingsScreen() {
       await AsyncStorage.setItem('@kho_du_lieu_cua_be', JSON.stringify(newData));
       setMediaData(newData);
     } catch (error) {
-      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được ảnh vào bộ nhớ máy!');
+      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được vào máy!');
     }
   };
 
@@ -119,7 +102,7 @@ export default function SettingsScreen() {
 
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
-      if (Platform.OS !== 'web') Alert.alert("Cấp quyền", "Anh hai cho Tèo xin quyền vào kho ảnh mới lấy hình được nha!");
+      if (Platform.OS !== 'web') Alert.alert("Cấp quyền", "Cho Tèo xin quyền vào kho ảnh nha!");
       return;
     }
 
@@ -136,22 +119,16 @@ export default function SettingsScreen() {
       if (Platform.OS !== 'web') {
         const fileName = asset.uri.split('/').pop() || `file_${Date.now()}`;
         
-        // Bịt miệng TypeScript & Bắt lỗi quên Build Native
-        // @ts-ignore
-        const safeDocDir = FileSystem.documentDirectory;
-        
-        if (!safeDocDir) {
-           Alert.alert("Thiếu lõi Native 🚨", "Anh hai vừa cài expo-file-system nhưng chưa build lại app. Hãy chạy lệnh 'npx expo run:ios' (hoặc android) để nhúng lõi vào máy ảo/điện thoại nha!");
-           return;
-        }
-
-        const newPath = `${safeDocDir}${fileName}`;
+        // TÈO ÉP KIỂU Ở ĐÂY CHO TYPESCRIPT IM LẶNG 100%
+        const fsAny = FileSystem as any;
+        const docDir = fsAny.documentDirectory || '';
+        const newPath = `${docDir}${fileName}`;
 
         try {
-          await FileSystem.copyAsync({ from: asset.uri, to: newPath });
+          await fsAny.copyAsync({ from: asset.uri, to: newPath });
           finalUri = newPath; 
         } catch (error) {
-          Alert.alert('Lỗi', 'Lưu file thất bại. Anh hai thử lại xem!');
+          Alert.alert('Lỗi', 'Copy file thất bại. Đại ca thử lại xem!');
           return;
         }
       }
@@ -181,11 +158,8 @@ export default function SettingsScreen() {
     
     setSelectedItem({ ...selectedItem, name: editName.trim() });
     
-    if (Platform.OS !== 'web') {
-        Alert.alert('Thành công', 'Đã đổi tên mượt mà!');
-    } else {
-        window.alert('Thành công: Đã đổi tên mượt mà!'); 
-    }
+    if (Platform.OS !== 'web') Alert.alert('Thành công', 'Đã đổi tên mượt mà!');
+    else window.alert('Đã đổi tên mượt mà!'); 
   };
 
   const handleDelete = async () => {
@@ -194,10 +168,9 @@ export default function SettingsScreen() {
     const executeDelete = async () => {
       try {
         if (Platform.OS !== 'web') {
-            // @ts-ignore
-            if (FileSystem.documentDirectory) {
-                await FileSystem.deleteAsync(selectedItem.uri, { idempotent: true });
-            }
+            // TÈO ÉP KIỂU LÚC XÓA LUÔN NHA ĐẠI CA
+            const fsAny = FileSystem as any;
+            try { await fsAny.deleteAsync(selectedItem.uri, { idempotent: true }); } catch (e) {}
         }
         
         const updatedCategoryList = mediaData[selectedItem.category].filter(item => item.id !== selectedItem.id);
@@ -206,29 +179,22 @@ export default function SettingsScreen() {
         await saveCustomMedia(updatedData);
         setSelectedItem(null); 
       } catch (error) {
-        if (Platform.OS !== 'web') Alert.alert("Lỗi", "Không xóa được file rồi!");
+        if (Platform.OS !== 'web') Alert.alert("Lỗi", "Không xóa được file!");
       }
     };
 
     if (Platform.OS !== 'web') {
-        Alert.alert("Xóa Dữ Liệu", "Anh hai có chắc muốn xóa file này không?", [
+        Alert.alert("Xóa Dữ Liệu", "Anh hai chắc chắn xóa file này không?", [
           { text: "Hủy", style: "cancel" },
           { text: "Xóa Trắng", style: "destructive", onPress: executeDelete }
         ]);
     } else {
-        const confirmDelete = window.confirm("Anh hai có chắc muốn xóa file này không?");
+        const confirmDelete = window.confirm("Chắc chắn xóa file này?");
         if (confirmDelete) executeDelete();
     }
   };
 
-
-  if (loading) {
-    return (
-      <View style={[styles.container, { backgroundColor: colors.bg, justifyContent: 'center' }]}>
-        <ActivityIndicator size="large" color="#4F46E5" />
-      </View>
-    );
-  }
+  if (loading) return <View style={[styles.container, { backgroundColor: colors.bg, justifyContent: 'center' }]}><ActivityIndicator size="large" color="#4F46E5" /></View>;
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -237,16 +203,12 @@ export default function SettingsScreen() {
         {saving && <ActivityIndicator size="small" color="#4F46E5" />}
       </View>
 
-      {/* --- KHO DỮ LIỆU CỦA BÉ --- */}
       <View style={[styles.section, { backgroundColor: '#F0FDF4', borderColor: '#86EFAC', borderWidth: 2 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15 }}>
           <Text style={{ fontSize: 24, marginRight: 10 }}>🎁</Text>
           <View>
             <Text style={[styles.sectionTitle, { color: '#166534', marginBottom: 0 }]}>Kho Dữ Liệu Của Bé</Text>
             <Text style={{ color: '#15803D', fontSize: 12 }}>Thêm ảnh gia đình vào game</Text>
-            {Platform.OS === 'web' && (
-              <Text style={{ color: '#EF4444', fontSize: 10, marginTop: 2, fontStyle: 'italic' }}>*Bản Web: Ảnh tải lên sẽ mất khi f5 trang</Text>
-            )}
           </View>
         </View>
 
@@ -262,7 +224,6 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* --- GIAO DIỆN --- */}
       <View style={[styles.section, { backgroundColor: colors.card }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Giao diện</Text>
         <View style={styles.row}>
@@ -274,15 +235,12 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* --- PHẠM VI TOÁN (Đã đổi thành TextInput) --- */}
       <View style={[styles.section, { backgroundColor: colors.card }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Phạm vi con số</Text>
         <View style={styles.limitContainer}>
           <Text style={[styles.limitLabel, { color: colors.text }]}>Bé làm toán từ 1 đến:</Text>
           <TextInput
-            style={styles.limitInput}
-            keyboardType="number-pad"
-            value={maxLimit ? String(maxLimit) : ''}
+            style={styles.limitInput} keyboardType="number-pad" value={maxLimit ? String(maxLimit) : ''}
             onChangeText={(text) => {
               const val = parseInt(text.replace(/[^0-9]/g, ''), 10);
               setMaxLimit(isNaN(val) ? 0 : val);
@@ -294,89 +252,57 @@ export default function SettingsScreen() {
             }}
           />
         </View>
-        <Text style={styles.hint}>Nhập số bất kỳ (tối thiểu là 5) rồi nhấn OK/Xong trên bàn phím để lưu.</Text>
       </View>
 
-      {/* --- LOẠI PHÉP TÍNH --- */}
       <View style={[styles.section, { backgroundColor: colors.card }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Loại phép tính</Text>
         <View style={styles.typeContainer}>
-          <TouchableOpacity style={[styles.typeBtn, mathType === 'cong' && styles.typeBtnActive, { borderColor: colors.border }]} onPress={() => { setMathType('cong'); updateSettings(maxLimit, 'cong'); }}>
-            <Text style={styles.typeEmoji}>➕</Text><Text style={[styles.typeText, mathType === 'cong' && styles.typeTextActive]}>Phép Cộng</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.typeBtn, mathType === 'tru' && styles.typeBtnActive, { borderColor: colors.border }]} onPress={() => { setMathType('tru'); updateSettings(maxLimit, 'tru'); }}>
-            <Text style={styles.typeEmoji}>➖</Text><Text style={[styles.typeText, mathType === 'tru' && styles.typeTextActive]}>Phép Trừ</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.typeBtn, mathType === 'ca_hai' && styles.typeBtnActive, { borderColor: colors.border }]} onPress={() => { setMathType('ca_hai'); updateSettings(maxLimit, 'ca_hai'); }}>
-            <Text style={styles.typeEmoji}>🎲</Text><Text style={[styles.typeText, mathType === 'ca_hai' && styles.typeTextActive]}>Cả Hai</Text>
-          </TouchableOpacity>
+          <TouchableOpacity style={[styles.typeBtn, mathType === 'cong' && styles.typeBtnActive, { borderColor: colors.border }]} onPress={() => { setMathType('cong'); updateSettings(maxLimit, 'cong'); }}><Text style={styles.typeEmoji}>➕</Text><Text style={[styles.typeText, mathType === 'cong' && styles.typeTextActive]}>Cộng</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.typeBtn, mathType === 'tru' && styles.typeBtnActive, { borderColor: colors.border }]} onPress={() => { setMathType('tru'); updateSettings(maxLimit, 'tru'); }}><Text style={styles.typeEmoji}>➖</Text><Text style={[styles.typeText, mathType === 'tru' && styles.typeTextActive]}>Trừ</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.typeBtn, mathType === 'ca_hai' && styles.typeBtnActive, { borderColor: colors.border }]} onPress={() => { setMathType('ca_hai'); updateSettings(maxLimit, 'ca_hai'); }}><Text style={styles.typeEmoji}>🎲</Text><Text style={[styles.typeText, mathType === 'ca_hai' && styles.typeTextActive]}>Cả Hai</Text></TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Phiên bản 1.0.0</Text>
-        <Text style={styles.footerText}>Lưu trữ an toàn trên Supabase 🚀</Text>
-      </View>
-
-      {/* MODAL 1: HIỂN THỊ DANH SÁCH ẢNH THEO DANH MỤC */}
       <Modal visible={activeCategory !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveCategory(null)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{activeCategory ? CATEGORY_NAMES[activeCategory] : ''}</Text>
-            <TouchableOpacity onPress={() => setActiveCategory(null)} style={styles.closeBtn}>
-              <Ionicons name="close-circle" size={32} color="#6B7280" />
-            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setActiveCategory(null)} style={styles.closeBtn}><Ionicons name="close-circle" size={32} color="#6B7280" /></TouchableOpacity>
           </View>
-
           <ScrollView contentContainerStyle={styles.galleryGrid}>
             <TouchableOpacity style={styles.addMediaBtn} onPress={handleAddMedia}>
               <Ionicons name="add" size={40} color="#4F46E5" />
               <Text style={{color: '#4F46E5', fontWeight: 'bold', marginTop: 5}}>Thêm mới</Text>
             </TouchableOpacity>
-
             {activeCategory && mediaData[activeCategory].map((item) => (
               <TouchableOpacity key={item.id} style={styles.thumbContainer} onPress={() => { setSelectedItem(item); setEditName(item.name); }}>
                 <Image source={{ uri: item.uri }} style={styles.thumbImage} />
                 {item.type === 'video' && <Ionicons name="play-circle" size={30} color="white" style={styles.videoIcon} />}
-                <View style={styles.thumbLabelBox}>
-                  <Text style={styles.thumbLabelText} numberOfLines={1}>{item.name}</Text>
-                </View>
+                <View style={styles.thumbLabelBox}><Text style={styles.thumbLabelText} numberOfLines={1}>{item.name}</Text></View>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
       </Modal>
 
-      {/* MODAL 2: CHI TIẾT 1 ẢNH */}
       <Modal visible={selectedItem !== null} transparent={true} animationType="fade" onRequestClose={() => setSelectedItem(null)}>
         <View style={styles.detailOverlay}>
           <View style={styles.detailBox}>
-            <TouchableOpacity onPress={() => setSelectedItem(null)} style={styles.detailCloseBtn}>
-              <Ionicons name="close-circle" size={35} color="#EF4444" />
-            </TouchableOpacity>
-
+            <TouchableOpacity onPress={() => setSelectedItem(null)} style={styles.detailCloseBtn}><Ionicons name="close-circle" size={35} color="#EF4444" /></TouchableOpacity>
             {selectedItem && (
               <>
                 <Image source={{ uri: selectedItem.uri }} style={styles.detailImage} resizeMode="contain" />
-                
                 <Text style={styles.inputLabel}>Tên hiển thị (dùng làm đáp án đọc):</Text>
                 <View style={styles.renameRow}>
-                  <TextInput style={styles.nameInput} value={editName} onChangeText={setEditName} placeholder="Nhập tên ảnh..." />
-                  <TouchableOpacity style={styles.saveNameBtn} onPress={handleRename}>
-                    <Text style={styles.saveNameText}>Lưu</Text>
-                  </TouchableOpacity>
+                  <TextInput style={styles.nameInput} value={editName} onChangeText={setEditName} placeholder="Nhập tên..." />
+                  <TouchableOpacity style={styles.saveNameBtn} onPress={handleRename}><Text style={styles.saveNameText}>Lưu</Text></TouchableOpacity>
                 </View>
-
-                <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-                  <Ionicons name="trash" size={20} color="white" />
-                  <Text style={styles.deleteBtnText}>Xóa file này</Text>
-                </TouchableOpacity>
+                <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}><Ionicons name="trash" size={20} color="white" /><Text style={styles.deleteBtnText}>Xóa file này</Text></TouchableOpacity>
               </>
             )}
           </View>
         </View>
       </Modal>
-
     </ScrollView>
   );
 }
@@ -390,29 +316,20 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   rowLeft: { flexDirection: 'row', alignItems: 'center' },
   rowText: { fontSize: 16, fontWeight: '600', marginLeft: 12 },
-  
-  // Style Nhập số
   limitContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginVertical: 10 },
   limitLabel: { fontSize: 16, fontWeight: 'bold', marginRight: 15 },
   limitInput: { fontSize: 24, fontWeight: '900', color: '#4F46E5', backgroundColor: '#EEF2FF', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 15, borderWidth: 2, borderColor: '#818CF8', minWidth: 100, textAlign: 'center' },
-  
-  hint: { fontSize: 14, color: '#6B7280', marginTop: 8, textAlign: 'center' },
   typeContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
   typeBtn: { width: '30%', paddingVertical: 12, borderRadius: 15, borderWidth: 2, alignItems: 'center', backgroundColor: 'white' },
   typeBtnActive: { backgroundColor: '#EEF2FF', borderColor: '#4F46E5' },
   typeEmoji: { fontSize: 24, marginBottom: 5 },
   typeText: { fontSize: 12, fontWeight: 'bold', color: '#6B7280' },
   typeTextActive: { color: '#4F46E5' },
-  footer: { marginTop: 20, marginBottom: 40, alignItems: 'center' },
-  footerText: { color: '#9CA3AF', fontSize: 14, marginBottom: 5 },
-
-  // Styles cho Kho dữ liệu
   mediaGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   mediaCategoryBtn: { width: '48%', backgroundColor: 'white', padding: 15, borderRadius: 15, marginBottom: 10, borderWidth: 1, borderColor: '#BBF7D0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   mediaCategoryTitle: { fontSize: 14, fontWeight: 'bold', color: '#166534', flex: 1 },
   mediaBadge: { backgroundColor: '#22C55E', borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' },
   mediaBadgeText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
-
   modalContainer: { flex: 1, backgroundColor: '#F3F4F6' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
@@ -424,7 +341,6 @@ const styles = StyleSheet.create({
   videoIcon: { position: 'absolute', top: '50%', left: '50%', transform: [{translateX: -15}, {translateY: -15}] },
   thumbLabelBox: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: 'rgba(0,0,0,0.6)', padding: 5 },
   thumbLabelText: { color: 'white', fontSize: 10, textAlign: 'center', fontWeight: 'bold' },
-
   detailOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   detailBox: { width: '100%', backgroundColor: 'white', borderRadius: 20, padding: 20, alignItems: 'center' },
   detailCloseBtn: { position: 'absolute', top: -15, right: -15, backgroundColor: 'white', borderRadius: 20 },

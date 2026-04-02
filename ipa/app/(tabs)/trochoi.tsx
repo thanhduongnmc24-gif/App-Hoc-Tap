@@ -10,9 +10,9 @@ import LottieView from 'lottie-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Slider from '@react-native-community/slider';
 
-// TÈO ĐÃ BỎ DashPathEffect VÀ THÊM Group ĐỂ LÀM HIỆU ỨNG NEON SÁNG CHÓI
-import { Canvas, Path as SkiaPath, Skia, BlurMask, Group } from '@shopify/react-native-skia';
-import Svg, { Path as SvgPath } from 'react-native-svg';
+// TÈO LOẠI BỎ HOÀN TOÀN SKIA VÌ KHÔNG CẦN THIẾT
+// CHUYỂN SANG DÙNG SVG THUẦN TÚY 100% - NHẸ MƯỢT, KHÔNG LỖI, CÓ HIỆU ỨNG NEON GLOW XỊN
+import Svg, { Path } from 'react-native-svg';
 
 import { KHO_DONG_VAT } from '../../constants/kho_dong_vat';
 import { LOTTIE_ANIMALS } from '../../constants/kho_lottie';
@@ -37,12 +37,11 @@ const generateMathProblem = (limit: number) => {
     if (!options.includes(wrongAns)) options.push(wrongAns);
   }
   options.sort(() => Math.random() - 0.5);
-  
   return { num1, num2, correctAns, options };
 };
 
 // ==========================================
-// GAME 1: CHO ĐỘNG VẬT ĂN 🐰🥣
+// GAME 1: CHO ĐỘNG VẬT ĂN
 // ==========================================
 const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => void }) => {
   const unseenAnimalsRef = useRef<any[]>([]);
@@ -61,11 +60,8 @@ const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () =
 
   const handleAnswer = (ans: number) => {
     if (videoState !== 'idle' || !currentAnimal) return;
-    if (ans === problem.correctAns) {
-      setVideoState('eating');
-    } else {
-      setVideoState('crying');
-    }
+    if (ans === problem.correctAns) setVideoState('eating');
+    else setVideoState('crying');
   };
 
   const handleVideoFinish = (status: any) => {
@@ -83,21 +79,15 @@ const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () =
   if (!currentAnimal) {
     return (
       <View style={[styles.gameContainer, { backgroundColor: '#FEF3C7', justifyContent: 'center', alignItems: 'center' }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-          <Ionicons name="arrow-back-circle" size={50} color="#D97706" />
-        </TouchableOpacity>
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#B45309', textAlign: 'center', padding: 20 }}>
-          Rạp xiếc chưa có thú! Đại ca nạp thú vào kho nha!
-        </Text>
+        <TouchableOpacity style={styles.backBtn} onPress={onBack}><Ionicons name="arrow-back-circle" size={50} color="#D97706" /></TouchableOpacity>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#B45309', textAlign: 'center', padding: 20 }}>Rạp xiếc chưa có thú! Đại ca nạp thú vào kho nha!</Text>
       </View>
     );
   }
 
   return (
     <View style={[styles.gameContainer, { backgroundColor: '#FEF3C7' }]}>
-      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-        <Ionicons name="arrow-back-circle" size={50} color="#D97706" />
-      </TouchableOpacity>
+      <TouchableOpacity style={styles.backBtn} onPress={onBack}><Ionicons name="arrow-back-circle" size={50} color="#D97706" /></TouchableOpacity>
       <View style={styles.animalScreen}>
         {videoState === 'idle' ? (
           <Image source={currentAnimal.image} style={styles.animalMedia} resizeMode="cover" />
@@ -105,14 +95,11 @@ const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () =
           <Video source={videoState === 'eating' ? currentAnimal.videoAn : currentAnimal.videoKhoc} style={styles.animalMedia} resizeMode={ResizeMode.COVER} shouldPlay onPlaybackStatusUpdate={handleVideoFinish} />
         )}
       </View>
-      <View style={styles.problemBoard}>
-        <Text style={styles.problemText}>{problem.num1} + {problem.num2} = ?</Text>
-      </View>
+      <View style={styles.problemBoard}><Text style={styles.problemText}>{problem.num1} + {problem.num2} = ?</Text></View>
       <View style={styles.answerArea}>
         {problem.options.map((ans, index) => (
           <TouchableOpacity key={index} style={styles.foodItem} activeOpacity={0.7} onPress={() => handleAnswer(ans)}>
-            <Text style={styles.foodEmoji}>🥣</Text>
-            <Text style={styles.foodText}>{ans}</Text>
+            <Text style={styles.foodEmoji}>🥣</Text><Text style={styles.foodText}>{ans}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -121,51 +108,32 @@ const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () =
 };
 
 // ==========================================
-// GAME 2: BẬP BÊNH TOÁN HỌC ⚖️
+// GAME 2: BẬP BÊNH TOÁN HỌC
 // ==========================================
 const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: (i: any) => void, isAnimal?: boolean }) => {
   const pan = useRef(new Animated.ValueXY()).current;
   const scale = useRef(new Animated.Value(1)).current;
 
   const playPickSound = async () => {
-    try {
-      const { sound } = await Audio.Sound.createAsync({ uri: 'https://actions.google.com/sounds/v1/cartoon/pop.ogg' });
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate((status: any) => { if (status.isLoaded && status.didJustFinish) sound.unloadAsync(); });
-    } catch (error) {}
+    try { const { sound } = await Audio.Sound.createAsync({ uri: 'https://actions.google.com/sounds/v1/cartoon/pop.ogg' }); await sound.playAsync(); sound.setOnPlaybackStatusUpdate((s:any) => { if (s.isLoaded && s.didJustFinish) sound.unloadAsync(); }); } catch (error) {}
   };
 
   const playDropSound = async () => {
-    try {
-      const { sound } = await Audio.Sound.createAsync({ uri: 'https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg' });
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate((status: any) => { if (status.isLoaded && status.didJustFinish) sound.unloadAsync(); });
-    } catch (error) {}
+    try { const { sound } = await Audio.Sound.createAsync({ uri: 'https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg' }); await sound.playAsync(); sound.setOnPlaybackStatusUpdate((s:any) => { if (s.isLoaded && s.didJustFinish) sound.unloadAsync(); }); } catch (error) {}
   };
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        playPickSound();
-        Animated.spring(scale, { toValue: 1.2, useNativeDriver: false }).start();
-      },
+      onPanResponderGrant: () => { playPickSound(); Animated.spring(scale, { toValue: 1.2, useNativeDriver: false }).start(); },
       onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
       onPanResponderRelease: (e, gesture) => {
         Animated.spring(scale, { toValue: 1, useNativeDriver: false }).start();
-        if (gesture.dy < -60) {
-          playDropSound();
-          onDrop(item);
-        } else {
-          Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
-        }
+        if (gesture.dy < -60) { playDropSound(); onDrop(item); } 
+        else Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
       }
     })
   ).current;
-
-  useEffect(() => {
-    return () => { pan.removeAllListeners(); scale.removeAllListeners(); };
-  }, []);
 
   return (
     <Animated.View style={[{ transform: [...pan.getTranslateTransform(), { scale }] }]} {...panResponder.panHandlers}>
@@ -183,29 +151,20 @@ const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: 
   );
 };
 
-const BLOCK_COLORS = [
-  { bg: '#FCA5A5', border: '#B91C1C' }, { bg: '#93C5FD', border: '#1D4ED8' }, 
-  { bg: '#86EFAC', border: '#15803D' }, { bg: '#FDE047', border: '#A16207' }, 
-  { bg: '#D8B4FE', border: '#7E22CE' }, 
-];
+const BLOCK_COLORS = [ { bg: '#FCA5A5', border: '#B91C1C' }, { bg: '#93C5FD', border: '#1D4ED8' }, { bg: '#86EFAC', border: '#15803D' }, { bg: '#FDE047', border: '#A16207' }, { bg: '#D8B4FE', border: '#7E22CE' } ];
 
 const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => void }) => {
   const initGame = () => {
     const targetLimit = maxLimit > 20 ? 20 : Math.max(maxLimit, 5);
     const target = Math.floor(Math.random() * (targetLimit - 4)) + 5; 
     const sessionKey = Date.now(); 
-
     const selectedLottie = LOTTIE_ANIMALS && LOTTIE_ANIMALS.length > 0 ? LOTTIE_ANIMALS[Math.floor(Math.random() * LOTTIE_ANIMALS.length)] : null;
     const animal = { id: `a1_${sessionKey}`, lottieAnim: selectedLottie, val: target };
-    
     let blocks = [];
     for(let i = 1; i <= 9; i++) {
       let val = i >= target ? Math.floor(Math.random() * (target - 1)) + 1 : i;
       const color = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
-      blocks.push({
-        id: `b${i}_${sessionKey}`, val: val, color, rot: `${Math.floor(Math.random() * 40 - 20)}deg`, 
-        marginLeft: Math.floor(Math.random() * 5), marginTop: Math.floor(Math.random() * 5),  
-      });
+      blocks.push({ id: `b${i}_${sessionKey}`, val: val, color, rot: `${Math.floor(Math.random() * 40 - 20)}deg`, marginLeft: Math.floor(Math.random() * 5), marginTop: Math.floor(Math.random() * 5) });
     }
     blocks.sort(() => Math.random() - 0.5); 
     return { animal, blocks, target };
@@ -215,10 +174,8 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
   const [animalPlaced, setAnimalPlaced] = useState(false);
   const [placedBlocks, setPlacedBlocks] = useState<any[]>([]);
   const [isVictory, setIsVictory] = useState(false);
-
   const leftWeight = animalPlaced ? gameState.target : 0;
   const rightWeight = placedBlocks.reduce((sum, b) => sum + b.val, 0);
-
   const tiltAnim = useRef(new Animated.Value(0)).current;
   const winScaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -229,26 +186,15 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
 
     if (leftWeight === rightWeight && leftWeight > 0 && !isVictory) {
       setIsVictory(true);
-      Animated.sequence([
-        Animated.timing(winScaleAnim, { toValue: 1.1, duration: 200, useNativeDriver: true }),
-        Animated.spring(winScaleAnim, { toValue: 1, friction: 2, useNativeDriver: true })
-      ]).start();
-      timeout = setTimeout(() => {
-        setAnimalPlaced(false); setPlacedBlocks([]); setIsVictory(false); setGameState(initGame());
-      }, 3000);
+      Animated.sequence([ Animated.timing(winScaleAnim, { toValue: 1.1, duration: 200, useNativeDriver: true }), Animated.spring(winScaleAnim, { toValue: 1, friction: 2, useNativeDriver: true }) ]).start();
+      timeout = setTimeout(() => { setAnimalPlaced(false); setPlacedBlocks([]); setIsVictory(false); setGameState(initGame()); }, 3000);
     }
     return () => { if (timeout) clearTimeout(timeout); };
   }, [leftWeight, rightWeight]);
 
   const handleDropAnimal = () => setAnimalPlaced(true);
-  const handleDropBlock = (block: any) => {
-    setGameState(prev => ({ ...prev, blocks: prev.blocks.filter(b => b.id !== block.id) }));
-    setPlacedBlocks(prev => [...prev, block]);
-  };
-  const handleRemoveBlock = (block: any) => {
-    setPlacedBlocks(prev => prev.filter(b => b.id !== block.id));
-    setGameState(prev => ({ ...prev, blocks: [...prev.blocks, block] }));
-  };
+  const handleDropBlock = (block: any) => { setGameState(prev => ({ ...prev, blocks: prev.blocks.filter(b => b.id !== block.id) })); setPlacedBlocks(prev => [...prev, block]); };
+  const handleRemoveBlock = (block: any) => { setPlacedBlocks(prev => prev.filter(b => b.id !== block.id)); setGameState(prev => ({ ...prev, blocks: [...prev.blocks, block] })); };
 
   const rotateInterpolate = tiltAnim.interpolate({ inputRange: [-20, 20], outputRange: ['-20deg', '20deg'] });
 
@@ -266,10 +212,7 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
           <View style={styles.panContainerLeft}>
             <View style={styles.pan}>
               {animalPlaced && (
-                <View style={styles.animalOnPan}>
-                  <LottieView source={gameState.animal.lottieAnim} autoPlay loop style={styles.lottieAnimal} />
-                  <View style={styles.animalBadge}><Text style={styles.animalBadgeText}>{gameState.animal.val}</Text></View>
-                </View>
+                <View style={styles.animalOnPan}><LottieView source={gameState.animal.lottieAnim} autoPlay loop style={styles.lottieAnimal} /><View style={styles.animalBadge}><Text style={styles.animalBadgeText}>{gameState.animal.val}</Text></View></View>
               )}
             </View>
             <View style={styles.panRopeLeft} /><View style={styles.panRopeRight} />
@@ -362,15 +305,16 @@ const DapThuGame = ({ onBack }: { onBack: () => void }) => {
     return () => { if (gameLoopRef.current) clearTimeout(gameLoopRef.current); };
   }, [startGame]);
 
+  const playBonkSound = async () => {
+    try { const { sound } = await Audio.Sound.createAsync({ uri: 'https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg' }); await sound.playAsync(); sound.setOnPlaybackStatusUpdate((s:any) => { if (s.isLoaded && s.didJustFinish) sound.unloadAsync(); }); } catch (error) {}
+  };
+
   const handleWhack = (index: number, event: any) => {
     if (gameOverRef.current) return;
     const { pageX, pageY } = event.nativeEvent;
     setHammerPos({ x: pageX, y: pageY });
     hammerAnim.setValue(0);
-    Animated.sequence([
-      Animated.timing(hammerAnim, { toValue: 1, duration: 80, useNativeDriver: true }), 
-      Animated.timing(hammerAnim, { toValue: 0, duration: 150, delay: 50, useNativeDriver: true })
-    ]).start(() => setHammerPos(null));
+    Animated.sequence([ Animated.timing(hammerAnim, { toValue: 1, duration: 80, useNativeDriver: true }), Animated.timing(hammerAnim, { toValue: 0, duration: 150, delay: 50, useNativeDriver: true }) ]).start(() => setHammerPos(null));
 
     if (index === activeHoleRef.current) {
       if (gameLoopRef.current) clearTimeout(gameLoopRef.current);
@@ -440,11 +384,7 @@ const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
         const stored = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (parsed.thu_thach) {
-             custom = parsed.thu_thach.map((item:any, index:number) => ({ 
-               id: 'custom_'+index, image: {uri: item.uri} 
-             }));
-          }
+          if (parsed.thu_thach) custom = parsed.thu_thach.map((item:any, index:number) => ({ id: 'custom_'+index, image: {uri: item.uri} }));
         }
       } catch (e) {}
       const base = THU_THACH_IMAGES.map((img, index) => ({ id: 'base_'+index, image: img }));
@@ -468,9 +408,7 @@ const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
         timeoutRef.current = setTimeout(spin, speed);
       } else {
         let finalIdx = Math.floor(Math.random() * allThuThach.length);
-        while (allThuThach.length > 1 && allThuThach[finalIdx].id === lastImgId) {
-           finalIdx = Math.floor(Math.random() * allThuThach.length);
-        }
+        while (allThuThach.length > 1 && allThuThach[finalIdx].id === lastImgId) finalIdx = Math.floor(Math.random() * allThuThach.length);
         const finalImage = allThuThach[finalIdx];
         setCurrentImg(finalImage); setLastImgId(finalImage.id); setIsSpinning(false);
         Animated.sequence([ Animated.timing(bounceAnim, { toValue: 1.1, duration: 150, useNativeDriver: true }), Animated.spring(bounceAnim, { toValue: 1, friction: 3, useNativeDriver: true }) ]).start();
@@ -494,8 +432,7 @@ const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
           </Animated.View>
         ) : (
           <View style={[styles.challengeCard, styles.cardPlaceholder]}>
-             <Text style={{ fontSize: 100 }}>❓</Text>
-             <Text style={{ fontSize: 20, color: '#EA580C', fontWeight: 'bold', marginTop: 10 }}>Bé sẵn sàng chưa?</Text>
+             <Text style={{ fontSize: 100 }}>❓</Text><Text style={{ fontSize: 20, color: '#EA580C', fontWeight: 'bold', marginTop: 10 }}>Bé sẵn sàng chưa?</Text>
           </View>
         )}
       </View>
@@ -513,17 +450,48 @@ const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
 };
 
 // =========================================================
-// GAME 5A: BÉ TẬP VẼ - PHIÊN BẢN CHẠY TRÊN WEB (SVG GỈA LẬP PHÁT SÁNG)
+// GAME 5: BÉ TẬP VẼ - DÙNG SVG THUẦN TÚY KHÔNG GÂY LỖI NATIVE
 // =========================================================
-const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allToMau }: any) => {
+const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
+  const [allToMau, setAllToMau] = useState<any[]>([]);
+  const [mode, setMode] = useState<'menu' | 'select_bg' | 'drawing'>('menu');
+  const [selectedBg, setSelectedBg] = useState<any>(null);
+
+  // Trạng thái vẽ
   const [paths, setPaths] = useState<any[]>([]);
   const [currentPath, setCurrentPath] = useState<any>(null);
   const [currentColor, setCurrentColor] = useState('#EF4444');
   const [strokeWidth, setStrokeWidth] = useState(8);
   const [penType, setPenType] = useState<'thuong' | 'kim_tuyen'>('thuong');
 
+  useFocusEffect(useCallback(() => {
+    const load = async () => {
+      let custom: any[] = [];
+      try {
+        const stored = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.to_mau) custom = parsed.to_mau.map((item:any) => ({ uri: item.uri }));
+        }
+      } catch (e) {}
+      setAllToMau([...KHO_ANH_TO_MAU, ...custom]);
+    };
+    load();
+  }, []));
+
   const undoLastPath = () => setPaths((prev) => prev.slice(0, -1));
   const clearAllPaths = () => setPaths([]);
+
+  if (mode === 'menu') {
+    return (
+      <View style={[styles.gameContainer, { backgroundColor: '#FDF4FF', justifyContent: 'center', alignItems: 'center' }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={onBack}><Ionicons name="arrow-back-circle" size={50} color="#C026D3" /></TouchableOpacity>
+        <Text style={styles.drawMenuTitle}>Bé Thích Vẽ Gì Nào? 🎨</Text>
+        <TouchableOpacity style={[styles.drawModeBtn, { backgroundColor: '#E879F9' }]} onPress={() => { setSelectedBg(null); setMode('drawing'); }}><Text style={styles.drawModeText}>⬜ Tự do sáng tạo</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.drawModeBtn, { backgroundColor: '#60A5FA' }]} onPress={() => setMode('select_bg')}><Text style={styles.drawModeText}>🖼️ Tô màu theo mẫu</Text></TouchableOpacity>
+      </View>
+    );
+  }
 
   if (mode === 'select_bg') {
     return (
@@ -549,7 +517,7 @@ const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allT
     <View style={[styles.gameContainer, { backgroundColor: '#E5E7EB' }]}>
       <View style={styles.drawHeader}>
         <TouchableOpacity onPress={() => { setMode('menu'); clearAllPaths(); }}><Ionicons name="arrow-back-circle" size={45} color="#4B5563" /></TouchableOpacity>
-        <Text style={{fontWeight: 'bold', color: 'gray'}}>(Bản Web - Nét kim tuyến Glow)</Text>
+        <Text style={{fontWeight: 'bold', color: 'gray'}}>Bé Sáng Tạo (Neon Glow ✨)</Text>
         <View style={{ flexDirection: 'row', gap: 15 }}>
           <TouchableOpacity style={styles.drawActionBtn} onPress={undoLastPath}><Ionicons name="arrow-undo" size={24} color="white" /><Text style={styles.drawActionText}>Hoàn tác</Text></TouchableOpacity>
           <TouchableOpacity style={[styles.drawActionBtn, { backgroundColor: '#EF4444' }]} onPress={clearAllPaths}><Ionicons name="trash" size={24} color="white" /><Text style={styles.drawActionText}>Xóa hết</Text></TouchableOpacity>
@@ -558,7 +526,9 @@ const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allT
 
       <View style={styles.canvasArea}>
         {selectedBg && <Image source={selectedBg} style={StyleSheet.absoluteFillObject} resizeMode="contain" />}
-        <View style={StyleSheet.absoluteFillObject} onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true}
+        <View style={StyleSheet.absoluteFillObject} 
+          onStartShouldSetResponder={() => true} 
+          onMoveShouldSetResponder={() => true}
           onResponderGrant={(e) => {
             const { locationX, locationY } = e.nativeEvent;
             setCurrentPath({ d: `M ${locationX} ${locationY}`, color: currentColor, strokeWidth, type: penType });
@@ -572,30 +542,37 @@ const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allT
             if (currentPath) { setPaths((prev) => [...prev, currentPath]); setCurrentPath(null); }
           }}
         >
+          {/* TÈO CODE NEON GLOW CHUẨN 100% SVG ĐÂY NHA ĐẠI CA */}
           <Svg style={{ flex: 1 }}>
+            {/* Lớp mờ phát sáng (chỉ vẽ cho kim_tuyen) */}
+            {paths.map((p, index) => p.type === 'kim_tuyen' && (
+              <Path key={`glow_${index}`} d={p.d} stroke={p.color} strokeWidth={p.strokeWidth * 2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.3} />
+            ))}
+            {currentPath?.type === 'kim_tuyen' && (
+              <Path d={currentPath.d} stroke={currentPath.color} strokeWidth={currentPath.strokeWidth * 2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.3} />
+            )}
+            
+            {/* Lớp lõi sắc nét (kim_tuyen thì màu trắng và nhỏ hơn, thường thì lấy đúng màu) */}
             {paths.map((p, index) => (
-              <React.Fragment key={index}>
-                {p.type === 'kim_tuyen' ? (
-                  <React.Fragment>
-                    <SvgPath d={p.d} stroke={p.color} strokeWidth={p.strokeWidth * 2} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.4} />
-                    <SvgPath d={p.d} stroke="#FFFFFF" strokeWidth={p.strokeWidth * 0.4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  </React.Fragment>
-                ) : (
-                  <SvgPath d={p.d} stroke={p.color} strokeWidth={p.strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                )}
-              </React.Fragment>
+              <Path 
+                key={`core_${index}`} 
+                d={p.d} 
+                stroke={p.type === 'kim_tuyen' ? '#FFFFFF' : p.color} 
+                strokeWidth={p.type === 'kim_tuyen' ? p.strokeWidth * 0.4 : p.strokeWidth} 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                fill="none" 
+              />
             ))}
             {currentPath && (
-              <React.Fragment>
-                {currentPath.type === 'kim_tuyen' ? (
-                  <React.Fragment>
-                    <SvgPath d={currentPath.d} stroke={currentPath.color} strokeWidth={currentPath.strokeWidth * 2} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.4} />
-                    <SvgPath d={currentPath.d} stroke="#FFFFFF" strokeWidth={currentPath.strokeWidth * 0.4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  </React.Fragment>
-                ) : (
-                  <SvgPath d={currentPath.d} stroke={currentPath.color} strokeWidth={currentPath.strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                )}
-              </React.Fragment>
+              <Path 
+                d={currentPath.d} 
+                stroke={currentPath.type === 'kim_tuyen' ? '#FFFFFF' : currentPath.color} 
+                strokeWidth={currentPath.type === 'kim_tuyen' ? currentPath.strokeWidth * 0.4 : currentPath.strokeWidth} 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                fill="none" 
+              />
             )}
           </Svg>
         </View>
@@ -622,168 +599,9 @@ const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allT
   );
 };
 
-// =========================================================
-// GAME 5B: BÉ TẬP VẼ - PHIÊN BẢN CHẠY TRÊN ĐIỆN THOẠI (DÙNG SKIA CHUẨN NEON)
-// =========================================================
-const VeTranhGameNative = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allToMau }: any) => {
-  const [paths, setPaths] = useState<any[]>([]);
-  const [currentPath, setCurrentPath] = useState<any>(null);
-  const [currentColor, setCurrentColor] = useState('#EF4444');
-  const [strokeWidth, setStrokeWidth] = useState(8);
-  const [penType, setPenType] = useState<'thuong' | 'kim_tuyen'>('thuong');
-
-  const undoLastPath = () => setPaths((prev) => prev.slice(0, -1));
-  const clearAllPaths = () => setPaths([]);
-
-  if (mode === 'select_bg') {
-    return (
-      <View style={[styles.gameContainer, { backgroundColor: '#EFF6FF' }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => setMode('menu')}><Ionicons name="arrow-back-circle" size={50} color="#3B82F6" /></TouchableOpacity>
-        <Text style={[styles.drawMenuTitle, { marginTop: 80, color: '#1D4ED8' }]}>Chọn hình để tô màu nha</Text>
-        {allToMau.length === 0 ? (
-          <Text style={{ textAlign: 'center', marginTop: 50, fontSize: 18, color: 'gray' }}>Anh hai chưa thêm ảnh Tô Màu nào trong Cài Đặt kìa!</Text>
-        ) : (
-          <ScrollView contentContainerStyle={styles.bgSelectorGrid}>
-            {allToMau.map((img: any, idx: number) => (
-              <TouchableOpacity key={idx} style={styles.bgThumbnail} onPress={() => { setSelectedBg(img); setMode('drawing'); }}>
-                <Image source={img} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
-      </View>
-    );
-  }
-
-  return (
-    <View style={[styles.gameContainer, { backgroundColor: '#E5E7EB' }]}>
-      <View style={styles.drawHeader}>
-        <TouchableOpacity onPress={() => { setMode('menu'); clearAllPaths(); }}><Ionicons name="arrow-back-circle" size={45} color="#4B5563" /></TouchableOpacity>
-        <Text style={{fontWeight: 'bold', color: 'gray'}}>(Bản Mobile - Skia Kim Tuyến)</Text>
-        <View style={{ flexDirection: 'row', gap: 15 }}>
-          <TouchableOpacity style={styles.drawActionBtn} onPress={undoLastPath}><Ionicons name="arrow-undo" size={24} color="white" /><Text style={styles.drawActionText}>Hoàn tác</Text></TouchableOpacity>
-          <TouchableOpacity style={[styles.drawActionBtn, { backgroundColor: '#EF4444' }]} onPress={clearAllPaths}><Ionicons name="trash" size={24} color="white" /><Text style={styles.drawActionText}>Xóa hết</Text></TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.canvasArea}>
-        {selectedBg && <Image source={selectedBg} style={StyleSheet.absoluteFillObject} resizeMode="contain" />}
-        <View style={StyleSheet.absoluteFillObject} 
-          onStartShouldSetResponder={() => true}
-          onMoveShouldSetResponder={() => true}
-          onResponderGrant={(e) => {
-            const { locationX, locationY } = e.nativeEvent;
-            const newPath = Skia.Path.Make();
-            newPath.moveTo(locationX, locationY);
-            setCurrentPath({ path: newPath, color: currentColor, strokeWidth, type: penType });
-          }}
-          onResponderMove={(e) => {
-            if (!currentPath) return;
-            const { locationX, locationY } = e.nativeEvent;
-            const updatedPath = currentPath.path.copy(); 
-            updatedPath.lineTo(locationX, locationY);
-            setCurrentPath({ ...currentPath, path: updatedPath });
-          }}
-          onResponderRelease={() => {
-            if (currentPath) { setPaths([...paths, currentPath]); setCurrentPath(null); }
-          }}
-        >
-          <Canvas style={{ flex: 1, pointerEvents: 'none' }}>
-            {paths.map((p, index) => (
-              <React.Fragment key={index}>
-                {p.type === 'kim_tuyen' ? (
-                  <Group>
-                    <SkiaPath path={p.path} color={p.color} style="stroke" strokeWidth={p.strokeWidth * 2.5} strokeCap="round" strokeJoin="round">
-                      <BlurMask blur={p.strokeWidth} style="normal" />
-                    </SkiaPath>
-                    <SkiaPath path={p.path} color="#FFFFFF" style="stroke" strokeWidth={p.strokeWidth * 0.4} strokeCap="round" strokeJoin="round" />
-                  </Group>
-                ) : (
-                  <SkiaPath path={p.path} color={p.color} style="stroke" strokeWidth={p.strokeWidth} strokeCap="round" strokeJoin="round" />
-                )}
-              </React.Fragment>
-            ))}
-            
-            {currentPath && (
-              <React.Fragment>
-                {currentPath.type === 'kim_tuyen' ? (
-                  <Group>
-                    <SkiaPath path={currentPath.path} color={currentPath.color} style="stroke" strokeWidth={currentPath.strokeWidth * 2.5} strokeCap="round" strokeJoin="round">
-                      <BlurMask blur={currentPath.strokeWidth} style="normal" />
-                    </SkiaPath>
-                    <SkiaPath path={currentPath.path} color="#FFFFFF" style="stroke" strokeWidth={currentPath.strokeWidth * 0.4} strokeCap="round" strokeJoin="round" />
-                  </Group>
-                ) : (
-                  <SkiaPath path={currentPath.path} color={currentPath.color} style="stroke" strokeWidth={currentPath.strokeWidth} strokeCap="round" strokeJoin="round" />
-                )}
-              </React.Fragment>
-            )}
-          </Canvas>
-        </View>
-      </View>
-
-      <View style={styles.drawToolbar}>
-        <View style={styles.drawToolsRow}>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TouchableOpacity style={[styles.penTypeBtn, penType === 'thuong' && styles.penTypeActive]} onPress={() => setPenType('thuong')}><Text style={{ fontSize: 16 }}>✏️ Thường</Text></TouchableOpacity>
-            <TouchableOpacity style={[styles.penTypeBtn, penType === 'kim_tuyen' && styles.penTypeActive]} onPress={() => setPenType('kim_tuyen')}><Text style={{ fontSize: 16 }}>✨ Kim Tuyến</Text></TouchableOpacity>
-          </View>
-          <View style={styles.sliderContainer}>
-            <Text style={{ fontWeight: 'bold', color: '#4B5563' }}>Nét to nhỏ:</Text>
-            <Slider style={{ width: 150, height: 40 }} minimumValue={2} maximumValue={30} value={strokeWidth} onValueChange={setStrokeWidth} minimumTrackTintColor="#3B82F6" thumbTintColor="#2563EB" />
-          </View>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorPalette}>
-          {BUBBLE_COLORS.map((c) => (
-            <TouchableOpacity key={c} style={[styles.colorBubble, { backgroundColor: c }, currentColor === c && styles.colorBubbleActive ]} onPress={() => setCurrentColor(c)} />
-          ))}
-        </ScrollView>
-      </View>
-    </View>
-  );
-};
-
-// =========================================================
-// KHUNG ĐIỀU HƯỚNG CHUNG CHO GAME VẼ TRANH 
-// =========================================================
-const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
-  const [allToMau, setAllToMau] = useState<any[]>([]);
-  const [mode, setMode] = useState<'menu' | 'select_bg' | 'drawing'>('menu');
-  const [selectedBg, setSelectedBg] = useState<any>(null);
-
-  useFocusEffect(useCallback(() => {
-    const load = async () => {
-      let custom: any[] = [];
-      try {
-        const stored = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.to_mau) custom = parsed.to_mau.map((item:any) => ({ uri: item.uri }));
-        }
-      } catch (e) {}
-      setAllToMau([...KHO_ANH_TO_MAU, ...custom]);
-    };
-    load();
-  }, []));
-
-  if (mode === 'menu') {
-    return (
-      <View style={[styles.gameContainer, { backgroundColor: '#FDF4FF', justifyContent: 'center', alignItems: 'center' }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}><Ionicons name="arrow-back-circle" size={50} color="#C026D3" /></TouchableOpacity>
-        <Text style={styles.drawMenuTitle}>Bé Thích Vẽ Gì Nào? 🎨</Text>
-        <TouchableOpacity style={[styles.drawModeBtn, { backgroundColor: '#E879F9' }]} onPress={() => { setSelectedBg(null); setMode('drawing'); }}><Text style={styles.drawModeText}>⬜ Tự do sáng tạo</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.drawModeBtn, { backgroundColor: '#60A5FA' }]} onPress={() => setMode('select_bg')}><Text style={styles.drawModeText}>🖼️ Tô màu theo mẫu</Text></TouchableOpacity>
-      </View>
-    );
-  }
-
-  if (Platform.OS === 'web') {
-    return <VeTranhGameWeb mode={mode} setMode={setMode} selectedBg={selectedBg} setSelectedBg={setSelectedBg} onBack={onBack} allToMau={allToMau} />;
-  } else {
-    return <VeTranhGameNative mode={mode} setMode={setMode} selectedBg={selectedBg} setSelectedBg={setSelectedBg} onBack={onBack} allToMau={allToMau} />;
-  }
-};
-
+// ==========================================
+// MÀN HÌNH CHÍNH QUẢN LÝ CÁC TRÒ CHƠI
+// ==========================================
 export default function TroChoiHubScreen() {
   const { colors } = useTheme();
   const [maxLimit, setMaxLimit] = useState(10);
