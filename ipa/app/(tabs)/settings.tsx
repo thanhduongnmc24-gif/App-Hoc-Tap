@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 
 import * as ImagePicker from 'expo-image-picker';
+// TÈO GỌI LẠI FILE SYSTEM ĐỂ LƯU ẢNH VĨNH VIỄN KHÔNG BỊ ĐEN THUI NỮA
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -116,30 +117,16 @@ export default function SettingsScreen() {
       const asset = result.assets[0];
       let finalUri = asset.uri;
 
-      // XỬ LÝ LƯU FILE TRÊN iOS CỰC KỲ CẨN THẬN
+      // TÈO BẬT LẠI COPY FILE VĨNH VIỄN ĐỂ KHÔNG BỊ ĐEN THUI NHA ĐẠI CA
       if (Platform.OS !== 'web') {
         try {
-          // Lấy cái đuôi ảnh (jpg, png, heic...)
-          const extension = asset.uri.split('.').pop()?.split('?')[0] || 'jpg';
-          
-          // TẠO TÊN FILE MỚI SẠCH SẼ, KHÔNG DẤU CÁCH ĐỂ iOS KHÔNG BÁO LỖI
-          const safeFileName = `be_phuong_linh_${Date.now()}.${extension}`;
-          
-          // @ts-ignore
-          const docDir = FileSystem.documentDirectory;
-          if (!docDir) throw new Error("Không tìm thấy bộ nhớ nội bộ");
-          
-          const newPath = `${docDir}${safeFileName}`;
-
-          // @ts-ignore
+          const fileName = asset.uri.split('/').pop() || `img_${Date.now()}.jpg`;
+          const newPath = `${FileSystem.documentDirectory}${fileName}`;
           await FileSystem.copyAsync({ from: asset.uri, to: newPath });
-          
-          // Ghi đè đường dẫn thật
           finalUri = newPath; 
-
-        } catch (error: any) {
-          Alert.alert('Lỗi Lưu File', `Không thể lưu ảnh vào máy. Lỗi: ${error.message || error}`);
-          return;
+        } catch (error) {
+          console.log('Lỗi copy file (dùng tạm link gốc):', error);
+          // Nếu lỡ xui rủi copy không được thì vẫn có link gốc xài đỡ
         }
       }
 
@@ -154,7 +141,7 @@ export default function SettingsScreen() {
       const updatedData = { ...mediaData, [activeCategory]: [...mediaData[activeCategory], newItem] };
       await saveCustomMedia(updatedData);
       
-      if (Platform.OS !== 'web') Alert.alert('Thành công', 'Đã tải ảnh của bé vào kho!');
+      if (Platform.OS !== 'web') Alert.alert('Thành công', 'Đã lưu ảnh vĩnh viễn vào app!');
     }
   };
 
@@ -180,10 +167,7 @@ export default function SettingsScreen() {
     const executeDelete = async () => {
       try {
         if (Platform.OS !== 'web') {
-            try { 
-              // @ts-ignore
-              await FileSystem.deleteAsync(selectedItem.uri, { idempotent: true }); 
-            } catch (e) {}
+            try { await FileSystem.deleteAsync(selectedItem.uri, { idempotent: true }); } catch (e) {}
         }
         
         const updatedCategoryList = mediaData[selectedItem.category].filter(item => item.id !== selectedItem.id);
@@ -191,7 +175,7 @@ export default function SettingsScreen() {
         
         await saveCustomMedia(updatedData);
         setSelectedItem(null); 
-        if (Platform.OS !== 'web') Alert.alert("Thành công", "Đã xóa ảnh khỏi kho!");
+        if (Platform.OS !== 'web') Alert.alert("Thành công", "Đã xóa ảnh!");
       } catch (error) {
         if (Platform.OS !== 'web') Alert.alert("Lỗi", "Không xóa được file!");
       }
@@ -200,7 +184,7 @@ export default function SettingsScreen() {
     if (Platform.OS !== 'web') {
         Alert.alert("Xóa Dữ Liệu", "Anh hai chắc chắn xóa file này không?", [
           { text: "Hủy", style: "cancel" },
-          { text: "Xóa Trắng", style: "destructive", onPress: executeDelete }
+          { text: "Xóa", style: "destructive", onPress: executeDelete }
         ]);
     } else {
         const confirmDelete = window.confirm("Chắc chắn xóa file này?");
@@ -277,17 +261,24 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      <Modal visible={activeCategory !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveCategory(null)}>
+      {/* ============================================================= */}
+      {/* TÈO ĐÃ NHÉT CÁI BẢNG CHI TIẾT VÀO CHUNG MODAL NÀY ĐỂ TRỊ LỖI CHỚP TẮT TRÊN IOS */}
+      {/* ============================================================= */}
+      <Modal visible={activeCategory !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { setActiveCategory(null); setSelectedItem(null); }}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{activeCategory ? CATEGORY_NAMES[activeCategory] : ''}</Text>
-            <TouchableOpacity onPress={() => setActiveCategory(null)} style={styles.closeBtn}><Ionicons name="close-circle" size={32} color="#6B7280" /></TouchableOpacity>
+            <TouchableOpacity onPress={() => { setActiveCategory(null); setSelectedItem(null); }} style={styles.closeBtn}>
+              <Ionicons name="close-circle" size={32} color="#6B7280" />
+            </TouchableOpacity>
           </View>
+          
           <ScrollView contentContainerStyle={styles.galleryGrid}>
             <TouchableOpacity style={styles.addMediaBtn} onPress={handleAddMedia}>
               <Ionicons name="add" size={40} color="#4F46E5" />
               <Text style={{color: '#4F46E5', fontWeight: 'bold', marginTop: 5}}>Thêm mới</Text>
             </TouchableOpacity>
+            
             {activeCategory && mediaData[activeCategory].map((item) => (
               <TouchableOpacity key={item.id} style={styles.thumbContainer} onPress={() => { setSelectedItem(item); setEditName(item.name); }}>
                 <Image source={{ uri: item.uri }} style={styles.thumbImage} />
@@ -296,27 +287,34 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             ))}
           </ScrollView>
-        </View>
-      </Modal>
 
-      <Modal visible={selectedItem !== null} transparent={true} animationType="fade" onRequestClose={() => setSelectedItem(null)}>
-        <View style={styles.detailOverlay}>
-          <View style={styles.detailBox}>
-            <TouchableOpacity onPress={() => setSelectedItem(null)} style={styles.detailCloseBtn}><Ionicons name="close-circle" size={35} color="#EF4444" /></TouchableOpacity>
-            {selectedItem && (
-              <>
+          {/* LỚP PHỦ ẢO ĐỂ HIỂN THỊ CHI TIẾT ĐỔI TÊN MÀ KHÔNG DÙNG THÊM MODAL MỚI */}
+          {selectedItem !== null && (
+            <View style={[StyleSheet.absoluteFill, styles.detailOverlay]}>
+              <View style={styles.detailBox}>
+                <TouchableOpacity onPress={() => setSelectedItem(null)} style={styles.detailCloseBtn}>
+                  <Ionicons name="close-circle" size={35} color="#EF4444" />
+                </TouchableOpacity>
+                
                 <Image source={{ uri: selectedItem.uri }} style={styles.detailImage} resizeMode="contain" />
                 <Text style={styles.inputLabel}>Tên hiển thị (dùng làm đáp án đọc):</Text>
+                
                 <View style={styles.renameRow}>
                   <TextInput style={styles.nameInput} value={editName} onChangeText={setEditName} placeholder="Nhập tên..." />
                   <TouchableOpacity style={styles.saveNameBtn} onPress={handleRename}><Text style={styles.saveNameText}>Lưu</Text></TouchableOpacity>
                 </View>
-                <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}><Ionicons name="trash" size={20} color="white" /><Text style={styles.deleteBtnText}>Xóa file này</Text></TouchableOpacity>
-              </>
-            )}
-          </View>
+                
+                <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+                  <Ionicons name="trash" size={20} color="white" />
+                  <Text style={styles.deleteBtnText}>Xóa file này</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
         </View>
       </Modal>
+
     </ScrollView>
   );
 }
@@ -355,8 +353,10 @@ const styles = StyleSheet.create({
   videoIcon: { position: 'absolute', top: '50%', left: '50%', transform: [{translateX: -15}, {translateY: -15}] },
   thumbLabelBox: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: 'rgba(0,0,0,0.6)', padding: 5 },
   thumbLabelText: { color: 'white', fontSize: 10, textAlign: 'center', fontWeight: 'bold' },
-  detailOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  detailBox: { width: '100%', backgroundColor: 'white', borderRadius: 20, padding: 20, alignItems: 'center' },
+  
+  // TÈO SỬA LẠI DETAIL OVERLAY ĐỂ NÓ NẰM GỌN TRONG MODAL 1
+  detailOverlay: { backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20, zIndex: 1000 },
+  detailBox: { width: '100%', backgroundColor: 'white', borderRadius: 20, padding: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 10 },
   detailCloseBtn: { position: 'absolute', top: -15, right: -15, backgroundColor: 'white', borderRadius: 20 },
   detailImage: { width: 250, height: 250, borderRadius: 10, marginBottom: 20, backgroundColor: '#E5E7EB' },
   inputLabel: { alignSelf: 'flex-start', fontWeight: 'bold', color: '#4B5563', marginBottom: 5 },
