@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert, ActivityIndicator, Modal, Image, TextInput, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert, ActivityIndicator, Modal, Image, TextInput, Dimensions, Platform } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabaseConfig';
 import { Ionicons } from '@expo/vector-icons';
-import Slider from '@react-native-community/slider';
 
 // Thư viện mới cho vụ thêm ảnh
 import * as ImagePicker from 'expo-image-picker';
@@ -59,7 +58,7 @@ export default function SettingsScreen() {
   }, []);
 
   // ==========================================
-  // XỬ LÝ CÀI ĐẶT TOÁN HỌC (CŨ)
+  // XỬ LÝ CÀI ĐẶT TOÁN HỌC
   // ==========================================
   const fetchSettings = async () => {
     try {
@@ -86,14 +85,14 @@ export default function SettingsScreen() {
         await supabase.from('be_hoc_toan_data').update({ max_limit: newLimit, loai_phep_tinh: newType }).eq('user_id', user.id);
       }
     } catch (error) {
-      Alert.alert('Lỗi', 'Không lưu được cài đặt rồi anh hai ơi!');
+      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được cài đặt rồi anh hai ơi!');
     } finally {
       setSaving(false);
     }
   };
 
   // ==========================================
-  // XỬ LÝ KHO DỮ LIỆU CỦA BÉ (MỚI)
+  // XỬ LÝ KHO DỮ LIỆU CỦA BÉ
   // ==========================================
   const loadCustomMedia = async () => {
     try {
@@ -111,17 +110,16 @@ export default function SettingsScreen() {
       await AsyncStorage.setItem('@kho_du_lieu_cua_be', JSON.stringify(newData));
       setMediaData(newData);
     } catch (error) {
-      Alert.alert('Lỗi', 'Không lưu được ảnh vào bộ nhớ máy!');
+      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được ảnh vào bộ nhớ máy!');
     }
   };
 
   const handleAddMedia = async () => {
     if (!activeCategory) return;
 
-    // Yêu cầu quyền truy cập thư viện ảnh
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
-      Alert.alert("Cấp quyền", "Anh hai cho Tèo xin quyền vào kho ảnh mới lấy hình được nha!");
+      if (Platform.OS !== 'web') Alert.alert("Cấp quyền", "Anh hai cho Tèo xin quyền vào kho ảnh mới lấy hình được nha!");
       return;
     }
 
@@ -133,29 +131,41 @@ export default function SettingsScreen() {
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
-      const fileName = asset.uri.split('/').pop() || `file_${Date.now()}`;
-      
-      // TÈO ĐÃ SỬA LỖI TYPESCRIPT Ở ĐÂY NÈ ANH HAI
-      const safeDocDir = (FileSystem as any).documentDirectory || '';
-      const newPath = `${safeDocDir}${fileName}`;
+      let finalUri = asset.uri;
 
-      try {
-        await FileSystem.copyAsync({ from: asset.uri, to: newPath });
+      if (Platform.OS !== 'web') {
+        const fileName = asset.uri.split('/').pop() || `file_${Date.now()}`;
         
-        const newItem: CustomMedia = {
-          id: Date.now().toString(),
-          uri: newPath,
-          name: `Ảnh/Video ${mediaData[activeCategory].length + 1}`,
-          category: activeCategory,
-          type: asset.type === 'video' ? 'video' : 'image',
-        };
+        // Bịt miệng TypeScript & Bắt lỗi quên Build Native
+        // @ts-ignore
+        const safeDocDir = FileSystem.documentDirectory;
+        
+        if (!safeDocDir) {
+           Alert.alert("Thiếu lõi Native 🚨", "Anh hai vừa cài expo-file-system nhưng chưa build lại app. Hãy chạy lệnh 'npx expo run:ios' (hoặc android) để nhúng lõi vào máy ảo/điện thoại nha!");
+           return;
+        }
 
-        const updatedData = { ...mediaData, [activeCategory]: [...mediaData[activeCategory], newItem] };
-        await saveCustomMedia(updatedData);
+        const newPath = `${safeDocDir}${fileName}`;
 
-      } catch (error) {
-        Alert.alert('Lỗi', 'Lưu file thất bại. Anh hai thử lại xem!');
+        try {
+          await FileSystem.copyAsync({ from: asset.uri, to: newPath });
+          finalUri = newPath; 
+        } catch (error) {
+          Alert.alert('Lỗi', 'Lưu file thất bại. Anh hai thử lại xem!');
+          return;
+        }
       }
+
+      const newItem: CustomMedia = {
+        id: Date.now().toString(),
+        uri: finalUri,
+        name: `Ảnh ${mediaData[activeCategory].length + 1}`,
+        category: activeCategory,
+        type: asset.type === 'video' ? 'video' : 'image',
+      };
+
+      const updatedData = { ...mediaData, [activeCategory]: [...mediaData[activeCategory], newItem] };
+      await saveCustomMedia(updatedData);
     }
   };
 
@@ -169,36 +179,46 @@ export default function SettingsScreen() {
     const updatedData = { ...mediaData, [selectedItem.category]: updatedCategoryList };
     await saveCustomMedia(updatedData);
     
-    // Cập nhật lại UI đang xem
     setSelectedItem({ ...selectedItem, name: editName.trim() });
-    Alert.alert('Thành công', 'Đã đổi tên mượt mà!');
+    
+    if (Platform.OS !== 'web') {
+        Alert.alert('Thành công', 'Đã đổi tên mượt mà!');
+    } else {
+        window.alert('Thành công: Đã đổi tên mượt mà!'); 
+    }
   };
 
   const handleDelete = async () => {
     if (!selectedItem) return;
 
-    Alert.alert("Xóa Dữ Liệu", "Anh hai có chắc muốn xóa file này không?", [
-      { text: "Hủy", style: "cancel" },
-      { 
-        text: "Xóa Trắng", 
-        style: "destructive",
-        onPress: async () => {
-          try {
-            // TÈO CŨNG TRẢ LẠI HÀM GỐC Ở ĐÂY NHA
-            await FileSystem.deleteAsync(selectedItem.uri, { idempotent: true });
-            
-            // Xóa khỏi danh sách
-            const updatedCategoryList = mediaData[selectedItem.category].filter(item => item.id !== selectedItem.id);
-            const updatedData = { ...mediaData, [selectedItem.category]: updatedCategoryList };
-            
-            await saveCustomMedia(updatedData);
-            setSelectedItem(null); // Đóng modal chi tiết
-          } catch (error) {
-            Alert.alert("Lỗi", "Không xóa được file rồi!");
-          }
+    const executeDelete = async () => {
+      try {
+        if (Platform.OS !== 'web') {
+            // @ts-ignore
+            if (FileSystem.documentDirectory) {
+                await FileSystem.deleteAsync(selectedItem.uri, { idempotent: true });
+            }
         }
+        
+        const updatedCategoryList = mediaData[selectedItem.category].filter(item => item.id !== selectedItem.id);
+        const updatedData = { ...mediaData, [selectedItem.category]: updatedCategoryList };
+        
+        await saveCustomMedia(updatedData);
+        setSelectedItem(null); 
+      } catch (error) {
+        if (Platform.OS !== 'web') Alert.alert("Lỗi", "Không xóa được file rồi!");
       }
-    ]);
+    };
+
+    if (Platform.OS !== 'web') {
+        Alert.alert("Xóa Dữ Liệu", "Anh hai có chắc muốn xóa file này không?", [
+          { text: "Hủy", style: "cancel" },
+          { text: "Xóa Trắng", style: "destructive", onPress: executeDelete }
+        ]);
+    } else {
+        const confirmDelete = window.confirm("Anh hai có chắc muốn xóa file này không?");
+        if (confirmDelete) executeDelete();
+    }
   };
 
 
@@ -217,13 +237,16 @@ export default function SettingsScreen() {
         {saving && <ActivityIndicator size="small" color="#4F46E5" />}
       </View>
 
-      {/* --- KHO DỮ LIỆU CỦA BÉ (MỚI THÊM) --- */}
+      {/* --- KHO DỮ LIỆU CỦA BÉ --- */}
       <View style={[styles.section, { backgroundColor: '#F0FDF4', borderColor: '#86EFAC', borderWidth: 2 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15 }}>
           <Text style={{ fontSize: 24, marginRight: 10 }}>🎁</Text>
           <View>
             <Text style={[styles.sectionTitle, { color: '#166534', marginBottom: 0 }]}>Kho Dữ Liệu Của Bé</Text>
-            <Text style={{ color: '#15803D', fontSize: 12 }}>Thêm ảnh/video gia đình vào game</Text>
+            <Text style={{ color: '#15803D', fontSize: 12 }}>Thêm ảnh gia đình vào game</Text>
+            {Platform.OS === 'web' && (
+              <Text style={{ color: '#EF4444', fontSize: 10, marginTop: 2, fontStyle: 'italic' }}>*Bản Web: Ảnh tải lên sẽ mất khi f5 trang</Text>
+            )}
           </View>
         </View>
 
@@ -251,18 +274,27 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* --- PHẠM VI TOÁN --- */}
+      {/* --- PHẠM VI TOÁN (Đã đổi thành TextInput) --- */}
       <View style={[styles.section, { backgroundColor: colors.card }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Phạm vi con số</Text>
-        <View style={styles.sliderContainer}>
-          <Text style={[styles.sliderValue, { color: "#4F46E5" }]}>Trong phạm vi: {maxLimit}</Text>
-          <Slider
-            style={{ width: '100%', height: 40 }} minimumValue={5} maximumValue={100} step={5} value={maxLimit}
-            onValueChange={setMaxLimit} onSlidingComplete={(val: number) => updateSettings(val, mathType)}
-            minimumTrackTintColor="#4F46E5" maximumTrackTintColor="#D1D5DB" thumbTintColor="#4F46E5"
+        <View style={styles.limitContainer}>
+          <Text style={[styles.limitLabel, { color: colors.text }]}>Bé làm toán từ 1 đến:</Text>
+          <TextInput
+            style={styles.limitInput}
+            keyboardType="number-pad"
+            value={maxLimit ? String(maxLimit) : ''}
+            onChangeText={(text) => {
+              const val = parseInt(text.replace(/[^0-9]/g, ''), 10);
+              setMaxLimit(isNaN(val) ? 0 : val);
+            }}
+            onEndEditing={() => {
+              let finalLimit = maxLimit < 5 ? 5 : maxLimit;
+              setMaxLimit(finalLimit);
+              updateSettings(finalLimit, mathType);
+            }}
           />
-          <Text style={styles.hint}>Bé sẽ làm toán với các con số từ 1 đến {maxLimit}</Text>
         </View>
+        <Text style={styles.hint}>Nhập số bất kỳ (tối thiểu là 5) rồi nhấn OK/Xong trên bàn phím để lưu.</Text>
       </View>
 
       {/* --- LOẠI PHÉP TÍNH --- */}
@@ -286,9 +318,7 @@ export default function SettingsScreen() {
         <Text style={styles.footerText}>Lưu trữ an toàn trên Supabase 🚀</Text>
       </View>
 
-      {/* ======================================================= */}
-      {/* MODAL 1: HIỂN THỊ DANH SÁCH ẢNH THEO DANH MỤC            */}
-      {/* ======================================================= */}
+      {/* MODAL 1: HIỂN THỊ DANH SÁCH ẢNH THEO DANH MỤC */}
       <Modal visible={activeCategory !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveCategory(null)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -299,13 +329,11 @@ export default function SettingsScreen() {
           </View>
 
           <ScrollView contentContainerStyle={styles.galleryGrid}>
-            {/* Nút Thêm Mới */}
             <TouchableOpacity style={styles.addMediaBtn} onPress={handleAddMedia}>
               <Ionicons name="add" size={40} color="#4F46E5" />
               <Text style={{color: '#4F46E5', fontWeight: 'bold', marginTop: 5}}>Thêm mới</Text>
             </TouchableOpacity>
 
-            {/* Danh sách Ảnh/Video thu nhỏ */}
             {activeCategory && mediaData[activeCategory].map((item) => (
               <TouchableOpacity key={item.id} style={styles.thumbContainer} onPress={() => { setSelectedItem(item); setEditName(item.name); }}>
                 <Image source={{ uri: item.uri }} style={styles.thumbImage} />
@@ -319,9 +347,7 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      {/* ======================================================= */}
-      {/* MODAL 2: CHI TIẾT 1 ẢNH (ĐỂ ĐỔI TÊN / XÓA)              */}
-      {/* ======================================================= */}
+      {/* MODAL 2: CHI TIẾT 1 ẢNH */}
       <Modal visible={selectedItem !== null} transparent={true} animationType="fade" onRequestClose={() => setSelectedItem(null)}>
         <View style={styles.detailOverlay}>
           <View style={styles.detailBox}>
@@ -333,7 +359,7 @@ export default function SettingsScreen() {
               <>
                 <Image source={{ uri: selectedItem.uri }} style={styles.detailImage} resizeMode="contain" />
                 
-                <Text style={styles.inputLabel}>Tên hiển thị:</Text>
+                <Text style={styles.inputLabel}>Tên hiển thị (dùng làm đáp án đọc):</Text>
                 <View style={styles.renameRow}>
                   <TextInput style={styles.nameInput} value={editName} onChangeText={setEditName} placeholder="Nhập tên ảnh..." />
                   <TouchableOpacity style={styles.saveNameBtn} onPress={handleRename}>
@@ -364,8 +390,12 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   rowLeft: { flexDirection: 'row', alignItems: 'center' },
   rowText: { fontSize: 16, fontWeight: '600', marginLeft: 12 },
-  sliderContainer: { alignItems: 'center' },
-  sliderValue: { fontSize: 24, fontWeight: '900', marginBottom: 8 },
+  
+  // Style Nhập số
+  limitContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginVertical: 10 },
+  limitLabel: { fontSize: 16, fontWeight: 'bold', marginRight: 15 },
+  limitInput: { fontSize: 24, fontWeight: '900', color: '#4F46E5', backgroundColor: '#EEF2FF', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 15, borderWidth: 2, borderColor: '#818CF8', minWidth: 100, textAlign: 'center' },
+  
   hint: { fontSize: 14, color: '#6B7280', marginTop: 8, textAlign: 'center' },
   typeContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
   typeBtn: { width: '30%', paddingVertical: 12, borderRadius: 15, borderWidth: 2, alignItems: 'center', backgroundColor: 'white' },
@@ -383,7 +413,6 @@ const styles = StyleSheet.create({
   mediaBadge: { backgroundColor: '#22C55E', borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' },
   mediaBadgeText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
 
-  // Styles cho Modal Thư viện
   modalContainer: { flex: 1, backgroundColor: '#F3F4F6' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
@@ -396,7 +425,6 @@ const styles = StyleSheet.create({
   thumbLabelBox: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: 'rgba(0,0,0,0.6)', padding: 5 },
   thumbLabelText: { color: 'white', fontSize: 10, textAlign: 'center', fontWeight: 'bold' },
 
-  // Styles cho Modal Chi tiết
   detailOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   detailBox: { width: '100%', backgroundColor: 'white', borderRadius: 20, padding: 20, alignItems: 'center' },
   detailCloseBtn: { position: 'absolute', top: -15, right: -15, backgroundColor: 'white', borderRadius: 20 },

@@ -9,27 +9,15 @@ import ConfettiCannon from 'react-native-confetti-cannon';
 import LottieView from 'lottie-react-native';
 import Slider from '@react-native-community/slider';
 
-// THƯ VIỆN ĐỒ HỌA (TÈO ĐÃ ĐỔI TÊN ĐỂ TRÁNH ĐÁNH LỘN NHA ANH HAI)
 import { Canvas, Path as SkiaPath, Skia, DashPathEffect, BlurMask } from '@shopify/react-native-skia';
 import Svg, { Path as SvgPath } from 'react-native-svg';
 
-// Kho động vật (Dùng cho Game 1)
 import { KHO_DONG_VAT } from '../../constants/kho_dong_vat';
-// Kho Lottie (Dùng cho Game 2)
 import { LOTTIE_ANIMALS } from '../../constants/kho_lottie';
-// Kho ảnh Thử Thách (Dùng cho Game 4)
 import { THU_THACH_IMAGES } from '../../constants/kho_anh';
 
 const { width, height } = Dimensions.get('window');
-
-// Kho ảnh mẫu để bé tô màu
-const KHO_ANH_TO_MAU = [
-  // Nếu anh hai chưa có ảnh thực tế trong máy thì tạm comment 2 dòng require này lại để tránh lỗi app nha
-  require('../../assets/images/anh_to_mau/1.jpg'),
-  require('../../assets/images/anh_to_mau/2.jpg'),
-];
-
-// Bảng màu chung cho Game Vẽ Tranh
+const KHO_ANH_TO_MAU: any[] = [];
 const BUBBLE_COLORS = ['#EF4444', '#F97316', '#FBBF24', '#22C55E', '#3B82F6', '#A855F7', '#EC4899', '#000000', '#FFFFFF'];
 
 // ==========================================
@@ -108,25 +96,19 @@ const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () =
       <TouchableOpacity style={styles.backBtn} onPress={onBack}>
         <Ionicons name="arrow-back-circle" size={50} color="#D97706" />
       </TouchableOpacity>
-
       <View style={styles.animalScreen}>
         {videoState === 'idle' ? (
           <Image source={currentAnimal.image} style={styles.animalMedia} resizeMode="cover" />
         ) : (
           <Video
             source={videoState === 'eating' ? currentAnimal.videoAn : currentAnimal.videoKhoc}
-            style={styles.animalMedia}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay
-            onPlaybackStatusUpdate={handleVideoFinish}
+            style={styles.animalMedia} resizeMode={ResizeMode.COVER} shouldPlay onPlaybackStatusUpdate={handleVideoFinish}
           />
         )}
       </View>
-
       <View style={styles.problemBoard}>
         <Text style={styles.problemText}>{problem.num1} + {problem.num2} = ?</Text>
       </View>
-
       <View style={styles.answerArea}>
         {problem.options.map((ans, index) => (
           <TouchableOpacity key={index} style={styles.foodItem} activeOpacity={0.7} onPress={() => handleAnswer(ans)}>
@@ -182,10 +164,6 @@ const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: 
     })
   ).current;
 
-  useEffect(() => {
-    return () => { pan.removeAllListeners(); scale.removeAllListeners(); };
-  }, []);
-
   return (
     <Animated.View style={[{ transform: [...pan.getTranslateTransform(), { scale }] }]} {...panResponder.panHandlers}>
       {isAnimal ? (
@@ -222,8 +200,7 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
       let val = i >= target ? Math.floor(Math.random() * (target - 1)) + 1 : i;
       const color = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
       blocks.push({
-        id: `b${i}_${sessionKey}`, val: val, color,
-        rot: `${Math.floor(Math.random() * 40 - 20)}deg`, 
+        id: `b${i}_${sessionKey}`, val: val, color, rot: `${Math.floor(Math.random() * 40 - 20)}deg`, 
         marginLeft: Math.floor(Math.random() * 5), marginTop: Math.floor(Math.random() * 5),  
       });
     }
@@ -238,14 +215,12 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
 
   const leftWeight = animalPlaced ? gameState.target : 0;
   const rightWeight = placedBlocks.reduce((sum, b) => sum + b.val, 0);
-
   const tiltAnim = useRef(new Animated.Value(0)).current;
   const winScaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
     let targetTilt = leftWeight > rightWeight ? -15 : rightWeight > leftWeight ? 15 : 0; 
-
     Animated.spring(tiltAnim, { toValue: targetTilt, friction: 4, tension: 30, useNativeDriver: true }).start();
 
     if (leftWeight === rightWeight && leftWeight > 0 && !isVictory) {
@@ -254,7 +229,6 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
         Animated.timing(winScaleAnim, { toValue: 1.1, duration: 200, useNativeDriver: true }),
         Animated.spring(winScaleAnim, { toValue: 1, friction: 2, useNativeDriver: true })
       ]).start();
-
       timeout = setTimeout(() => {
         setAnimalPlaced(false); setPlacedBlocks([]); setIsVictory(false); setGameState(initGame());
       }, 3000);
@@ -318,9 +292,7 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
           </View>
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <View style={styles.blockInventory}>
-              {gameState.blocks.map(b => (
-                <DraggableItem key={b.id} item={b} onDrop={handleDropBlock} isAnimal={false} />
-              ))}
+              {gameState.blocks.map(b => <DraggableItem key={b.id} item={b} onDrop={handleDropBlock} isAnimal={false} />)}
             </View>
           </View>
         </View>
@@ -330,7 +302,7 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
 };
 
 // ==========================================
-// GAME 3: ĐẬP THÚ NHÚN (WHACK-A-MOLE) 🐹🔨
+// GAME 3: ĐẬP THÚ NHÚN (WHACK-A-MOLE)
 // ==========================================
 const HOLE_COUNT = 9;
 const MOLE_EMOJIS = ['🐹', '🐱', '🐶', '🐰', '🐼']; 
@@ -364,7 +336,6 @@ const DapThuGame = ({ onBack }: { onBack: () => void }) => {
     const currentScore = scoreRef.current;
     const stayTime = Math.max(350, 1000 - currentScore * 40); 
     const waitTime = Math.max(150, 500 - currentScore * 15); 
-    
     const randomHole = Math.floor(Math.random() * HOLE_COUNT);
     setActiveHole(randomHole);
     activeHoleRef.current = randomHole;
@@ -387,14 +358,6 @@ const DapThuGame = ({ onBack }: { onBack: () => void }) => {
     return () => { if (gameLoopRef.current) clearTimeout(gameLoopRef.current); };
   }, [startGame]);
 
-  const playBonkSound = async () => {
-    try {
-      const { sound } = await Audio.Sound.createAsync({ uri: 'https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg' });
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate((status: any) => { if (status.isLoaded && status.didJustFinish) sound.unloadAsync(); });
-    } catch (error) {}
-  };
-
   const handleWhack = (index: number, event: any) => {
     if (gameOverRef.current) return;
     const { pageX, pageY } = event.nativeEvent;
@@ -406,7 +369,6 @@ const DapThuGame = ({ onBack }: { onBack: () => void }) => {
     ]).start(() => setHammerPos(null));
 
     if (index === activeHoleRef.current) {
-      playBonkSound(); 
       if (gameLoopRef.current) clearTimeout(gameLoopRef.current);
       setActiveHole(null); activeHoleRef.current = null;
       scoreRef.current += 1; setScore(scoreRef.current);
@@ -421,9 +383,7 @@ const DapThuGame = ({ onBack }: { onBack: () => void }) => {
   return (
     <View style={[styles.gameContainer, { backgroundColor: '#D1FAE5' }]}>
       {hitEffect && <ConfettiCannon key={hitEffect.id} count={30} origin={{ x: hitEffect.x, y: hitEffect.y }} fallSpeed={2000} explosionSpeed={300} fadeOut />}
-      {hammerPos && (
-        <Animated.Text style={{ position: 'absolute', left: hammerPos.x - 30, top: hammerPos.y - 100, fontSize: 90, zIndex: 9999, transform: [{ rotate: hammerRotate }], textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 3, height: 3 }, textShadowRadius: 5 }}>🔨</Animated.Text>
-      )}
+      {hammerPos && <Animated.Text style={{ position: 'absolute', left: hammerPos.x - 30, top: hammerPos.y - 100, fontSize: 90, zIndex: 9999, transform: [{ rotate: hammerRotate }], textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 3, height: 3 }, textShadowRadius: 5 }}>🔨</Animated.Text>}
       <View style={styles.whackHeader}>
         <TouchableOpacity style={styles.whackBackBtn} onPress={onBack}><Ionicons name="arrow-back-circle" size={50} color="#047857" /></TouchableOpacity>
         <View style={styles.scoreBoardTop}>
@@ -457,71 +417,48 @@ const DapThuGame = ({ onBack }: { onBack: () => void }) => {
 };
 
 // ==========================================
-// GAME 4: THỬ THÁCH VUI NHỘN (SLOT MACHINE) 🃏✨
+// GAME 4: THỬ THÁCH VUI NHỘN (SLOT MACHINE)
 // ==========================================
 const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
   const KHO_THU_THACH = THU_THACH_IMAGES.map((img, index) => ({ id: index, image: img }));
-
   const [isSpinning, setIsSpinning] = useState(false);
   const [showCard, setShowCard] = useState(false);
   const [currentImg, setCurrentImg] = useState<any>(null);
   const [lastImgId, setLastImgId] = useState<number | null>(null);
-  
   const bounceAnim = useRef(new Animated.Value(1)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const startSpin = () => {
     if (isSpinning) return;
-    setIsSpinning(true);
-    setShowCard(true);
-    
+    setIsSpinning(true); setShowCard(true);
     let speed = 50;  
     let spins = 0;
     const maxSpins = 25; 
 
     const spin = () => {
       spins++;
-      const randomIdx = Math.floor(Math.random() * KHO_THU_THACH.length);
-      setCurrentImg(KHO_THU_THACH[randomIdx]);
-
+      setCurrentImg(KHO_THU_THACH[Math.floor(Math.random() * KHO_THU_THACH.length)]);
       if (spins < maxSpins) {
         speed += 15; 
         timeoutRef.current = setTimeout(spin, speed);
       } else {
         let finalIdx = Math.floor(Math.random() * KHO_THU_THACH.length);
-        while (KHO_THU_THACH.length > 1 && KHO_THU_THACH[finalIdx].id === lastImgId) {
-          finalIdx = Math.floor(Math.random() * KHO_THU_THACH.length);
-        }
-        
+        while (KHO_THU_THACH.length > 1 && KHO_THU_THACH[finalIdx].id === lastImgId) finalIdx = Math.floor(Math.random() * KHO_THU_THACH.length);
         const finalImage = KHO_THU_THACH[finalIdx];
-        setCurrentImg(finalImage);
-        setLastImgId(finalImage.id); 
-        setIsSpinning(false);
-        
-        Animated.sequence([
-          Animated.timing(bounceAnim, { toValue: 1.1, duration: 150, useNativeDriver: true }),
-          Animated.spring(bounceAnim, { toValue: 1, friction: 3, useNativeDriver: true })
-        ]).start();
+        setCurrentImg(finalImage); setLastImgId(finalImage.id); setIsSpinning(false);
+        Animated.sequence([ Animated.timing(bounceAnim, { toValue: 1.1, duration: 150, useNativeDriver: true }), Animated.spring(bounceAnim, { toValue: 1, friction: 3, useNativeDriver: true }) ]).start();
       }
     };
-    
     spin(); 
   };
 
-  useEffect(() => {
-    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
-  }, []);
+  useEffect(() => { return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }; }, []);
 
   return (
     <View style={[styles.gameContainer, { backgroundColor: '#FFEDD5', alignItems: 'center', justifyContent: 'center' }]}>
       {!isSpinning && showCard && <ConfettiCannon count={100} origin={{x: width / 2, y: 0}} fallSpeed={2000} />}
-      
-      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-        <Ionicons name="arrow-back-circle" size={50} color="#EA580C" />
-      </TouchableOpacity>
-
+      <TouchableOpacity style={styles.backBtn} onPress={onBack}><Ionicons name="arrow-back-circle" size={50} color="#EA580C" /></TouchableOpacity>
       <Text style={styles.thuThachTitle}>🎲 Thử Thách Vui Nhộn 🎲</Text>
-
       <View style={styles.cardStage}>
         {showCard && currentImg ? (
           <Animated.View style={[styles.challengeCard, { transform: [{ scale: bounceAnim }] }]}>
@@ -529,27 +466,15 @@ const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
             {isSpinning && <View style={styles.spinningOverlay} />}
           </Animated.View>
         ) : (
-          <View style={[styles.challengeCard, styles.cardPlaceholder]}>
-            <Text style={{ fontSize: 100 }}>❓</Text>
-            <Text style={{ fontSize: 20, color: '#EA580C', fontWeight: 'bold', marginTop: 10 }}>Bé sẵn sàng chưa?</Text>
-          </View>
+          <View style={[styles.challengeCard, styles.cardPlaceholder]}><Text style={{ fontSize: 100 }}>❓</Text><Text style={{ fontSize: 20, color: '#EA580C', fontWeight: 'bold', marginTop: 10 }}>Bé sẵn sàng chưa?</Text></View>
         )}
       </View>
-
       <View style={styles.thuThachControls}>
         {!showCard ? (
-           <TouchableOpacity style={[styles.spinBtn, { backgroundColor: '#F97316', borderColor: '#C2410C' }]} onPress={startSpin}>
-             <Text style={styles.spinBtnText}>🚀 BẮT ĐẦU</Text>
-           </TouchableOpacity>
+           <TouchableOpacity style={[styles.spinBtn, { backgroundColor: '#F97316', borderColor: '#C2410C' }]} onPress={startSpin}><Text style={styles.spinBtnText}>🚀 BẮT ĐẦU</Text></TouchableOpacity>
         ) : (
-           <TouchableOpacity 
-              style={[styles.spinBtn, { backgroundColor: isSpinning ? '#CBD5E1' : '#10B981', borderColor: isSpinning ? '#94A3B8' : '#047857' }]} 
-              onPress={startSpin} 
-              disabled={isSpinning}
-           >
-             <Text style={[styles.spinBtnText, { color: isSpinning ? 'gray' : 'white' }]}>
-                {isSpinning ? 'Đang chọn thẻ...' : '🎲 ĐỔI THỬ THÁCH KHÁC'}
-             </Text>
+           <TouchableOpacity style={[styles.spinBtn, { backgroundColor: isSpinning ? '#CBD5E1' : '#10B981', borderColor: isSpinning ? '#94A3B8' : '#047857' }]} onPress={startSpin} disabled={isSpinning}>
+             <Text style={[styles.spinBtnText, { color: isSpinning ? 'gray' : 'white' }]}>{isSpinning ? 'Đang chọn thẻ...' : '🎲 ĐỔI THỬ THÁCH KHÁC'}</Text>
            </TouchableOpacity>
         )}
       </View>
@@ -573,17 +498,11 @@ const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack }: an
   return (
     <View style={[styles.gameContainer, { backgroundColor: '#E5E7EB' }]}>
       <View style={styles.drawHeader}>
-        <TouchableOpacity onPress={() => { setMode('menu'); clearAllPaths(); }}>
-          <Ionicons name="arrow-back-circle" size={45} color="#4B5563" />
-        </TouchableOpacity>
+        <TouchableOpacity onPress={() => { setMode('menu'); clearAllPaths(); }}><Ionicons name="arrow-back-circle" size={45} color="#4B5563" /></TouchableOpacity>
         <Text style={{fontWeight: 'bold', color: 'gray'}}>(Bản Web - Nét kim tuyến là nét đứt)</Text>
         <View style={{ flexDirection: 'row', gap: 15 }}>
-          <TouchableOpacity style={styles.drawActionBtn} onPress={undoLastPath}>
-            <Ionicons name="arrow-undo" size={24} color="white" /><Text style={styles.drawActionText}>Hoàn tác</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.drawActionBtn, { backgroundColor: '#EF4444' }]} onPress={clearAllPaths}>
-            <Ionicons name="trash" size={24} color="white" /><Text style={styles.drawActionText}>Xóa hết</Text>
-          </TouchableOpacity>
+          <TouchableOpacity style={styles.drawActionBtn} onPress={undoLastPath}><Ionicons name="arrow-undo" size={24} color="white" /><Text style={styles.drawActionText}>Hoàn tác</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.drawActionBtn, { backgroundColor: '#EF4444' }]} onPress={clearAllPaths}><Ionicons name="trash" size={24} color="white" /><Text style={styles.drawActionText}>Xóa hết</Text></TouchableOpacity>
         </View>
       </View>
 
@@ -621,12 +540,8 @@ const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack }: an
       <View style={styles.drawToolbar}>
         <View style={styles.drawToolsRow}>
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TouchableOpacity style={[styles.penTypeBtn, penType === 'thuong' && styles.penTypeActive]} onPress={() => setPenType('thuong')}>
-              <Text style={{ fontSize: 16 }}>✏️ Thường</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.penTypeBtn, penType === 'kim_tuyen' && styles.penTypeActive]} onPress={() => setPenType('kim_tuyen')}>
-              <Text style={{ fontSize: 16 }}>✨ Kim Tuyến</Text>
-            </TouchableOpacity>
+            <TouchableOpacity style={[styles.penTypeBtn, penType === 'thuong' && styles.penTypeActive]} onPress={() => setPenType('thuong')}><Text style={{ fontSize: 16 }}>✏️ Thường</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.penTypeBtn, penType === 'kim_tuyen' && styles.penTypeActive]} onPress={() => setPenType('kim_tuyen')}><Text style={{ fontSize: 16 }}>✨ Kim Tuyến</Text></TouchableOpacity>
           </View>
           <View style={styles.sliderContainer}>
             <Text style={{ fontWeight: 'bold', color: '#4B5563' }}>Nét to nhỏ:</Text>
@@ -645,6 +560,7 @@ const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack }: an
 
 // =========================================================
 // GAME 5B: BÉ TẬP VẼ - PHIÊN BẢN CHẠY TRÊN ĐIỆN THOẠI (DÙNG SKIA)
+// Đã đồng bộ bộ bắt sự kiện vuốt y chang bản Web!
 // =========================================================
 const VeTranhGameNative = ({ mode, setMode, selectedBg, setSelectedBg, onBack }: any) => {
   const [paths, setPaths] = useState<any[]>([]);
@@ -656,46 +572,41 @@ const VeTranhGameNative = ({ mode, setMode, selectedBg, setSelectedBg, onBack }:
   const undoLastPath = () => setPaths((prev) => prev.slice(0, -1));
   const clearAllPaths = () => setPaths([]);
 
-  const handleTouchStart = (e: any) => {
-    const { locationX, locationY } = e.nativeEvent;
-    const newPath = Skia.Path.Make();
-    newPath.moveTo(locationX, locationY);
-    setCurrentPath({ path: newPath, color: currentColor, strokeWidth, type: penType });
-  };
-
-  const handleTouchMove = (e: any) => {
-    if (!currentPath) return;
-    const { locationX, locationY } = e.nativeEvent;
-    const updatedPath = currentPath.path.copy(); 
-    updatedPath.lineTo(locationX, locationY);
-    setCurrentPath({ ...currentPath, path: updatedPath });
-  };
-
-  const handleTouchEnd = () => {
-    if (currentPath) { setPaths([...paths, currentPath]); setCurrentPath(null); }
-  };
-
   return (
     <View style={[styles.gameContainer, { backgroundColor: '#E5E7EB' }]}>
       <View style={styles.drawHeader}>
-        <TouchableOpacity onPress={() => { setMode('menu'); clearAllPaths(); }}>
-          <Ionicons name="arrow-back-circle" size={45} color="#4B5563" />
-        </TouchableOpacity>
+        <TouchableOpacity onPress={() => { setMode('menu'); clearAllPaths(); }}><Ionicons name="arrow-back-circle" size={45} color="#4B5563" /></TouchableOpacity>
         <Text style={{fontWeight: 'bold', color: 'gray'}}>(Bản Mobile - Skia Kim Tuyến)</Text>
         <View style={{ flexDirection: 'row', gap: 15 }}>
-          <TouchableOpacity style={styles.drawActionBtn} onPress={undoLastPath}>
-            <Ionicons name="arrow-undo" size={24} color="white" /><Text style={styles.drawActionText}>Hoàn tác</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.drawActionBtn, { backgroundColor: '#EF4444' }]} onPress={clearAllPaths}>
-            <Ionicons name="trash" size={24} color="white" /><Text style={styles.drawActionText}>Xóa hết</Text>
-          </TouchableOpacity>
+          <TouchableOpacity style={styles.drawActionBtn} onPress={undoLastPath}><Ionicons name="arrow-undo" size={24} color="white" /><Text style={styles.drawActionText}>Hoàn tác</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.drawActionBtn, { backgroundColor: '#EF4444' }]} onPress={clearAllPaths}><Ionicons name="trash" size={24} color="white" /><Text style={styles.drawActionText}>Xóa hết</Text></TouchableOpacity>
         </View>
       </View>
 
       <View style={styles.canvasArea}>
         {selectedBg && <Image source={selectedBg} style={StyleSheet.absoluteFillObject} resizeMode="contain" />}
-        <View style={StyleSheet.absoluteFillObject} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
-          <Canvas style={{ flex: 1 }}>
+        {/* TÈO SỬA LỖI KHÔNG VẼ ĐƯỢC TRÊN MOBILE Ở ĐÂY */}
+        <View style={StyleSheet.absoluteFillObject} 
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+          onResponderGrant={(e) => {
+            const { locationX, locationY } = e.nativeEvent;
+            const newPath = Skia.Path.Make();
+            newPath.moveTo(locationX, locationY);
+            setCurrentPath({ path: newPath, color: currentColor, strokeWidth, type: penType });
+          }}
+          onResponderMove={(e) => {
+            if (!currentPath) return;
+            const { locationX, locationY } = e.nativeEvent;
+            const updatedPath = currentPath.path.copy(); 
+            updatedPath.lineTo(locationX, locationY);
+            setCurrentPath({ ...currentPath, path: updatedPath });
+          }}
+          onResponderRelease={() => {
+            if (currentPath) { setPaths([...paths, currentPath]); setCurrentPath(null); }
+          }}
+        >
+          <Canvas style={{ flex: 1, pointerEvents: 'none' }}>
             {paths.map((p, index) => (
               <SkiaPath key={index} path={p.path} color={p.color} style="stroke" strokeWidth={p.strokeWidth} strokeCap="round" strokeJoin="round">
                 {p.type === 'kim_tuyen' && <DashPathEffect intervals={[p.strokeWidth, p.strokeWidth * 1.5]} />}
@@ -715,12 +626,8 @@ const VeTranhGameNative = ({ mode, setMode, selectedBg, setSelectedBg, onBack }:
       <View style={styles.drawToolbar}>
         <View style={styles.drawToolsRow}>
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TouchableOpacity style={[styles.penTypeBtn, penType === 'thuong' && styles.penTypeActive]} onPress={() => setPenType('thuong')}>
-              <Text style={{ fontSize: 16 }}>✏️ Thường</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.penTypeBtn, penType === 'kim_tuyen' && styles.penTypeActive]} onPress={() => setPenType('kim_tuyen')}>
-              <Text style={{ fontSize: 16 }}>✨ Kim Tuyến</Text>
-            </TouchableOpacity>
+            <TouchableOpacity style={[styles.penTypeBtn, penType === 'thuong' && styles.penTypeActive]} onPress={() => setPenType('thuong')}><Text style={{ fontSize: 16 }}>✏️ Thường</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.penTypeBtn, penType === 'kim_tuyen' && styles.penTypeActive]} onPress={() => setPenType('kim_tuyen')}><Text style={{ fontSize: 16 }}>✨ Kim Tuyến</Text></TouchableOpacity>
           </View>
           <View style={styles.sliderContainer}>
             <Text style={{ fontWeight: 'bold', color: '#4B5563' }}>Nét to nhỏ:</Text>
@@ -747,16 +654,10 @@ const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
   if (mode === 'menu') {
     return (
       <View style={[styles.gameContainer, { backgroundColor: '#FDF4FF', justifyContent: 'center', alignItems: 'center' }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-          <Ionicons name="arrow-back-circle" size={50} color="#C026D3" />
-        </TouchableOpacity>
+        <TouchableOpacity style={styles.backBtn} onPress={onBack}><Ionicons name="arrow-back-circle" size={50} color="#C026D3" /></TouchableOpacity>
         <Text style={styles.drawMenuTitle}>Bé Thích Vẽ Gì Nào? 🎨</Text>
-        <TouchableOpacity style={[styles.drawModeBtn, { backgroundColor: '#E879F9' }]} onPress={() => { setSelectedBg(null); setMode('drawing'); }}>
-          <Text style={styles.drawModeText}>⬜ Tự do sáng tạo</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.drawModeBtn, { backgroundColor: '#60A5FA' }]} onPress={() => setMode('select_bg')}>
-          <Text style={styles.drawModeText}>🖼️ Tô màu theo mẫu</Text>
-        </TouchableOpacity>
+        <TouchableOpacity style={[styles.drawModeBtn, { backgroundColor: '#E879F9' }]} onPress={() => { setSelectedBg(null); setMode('drawing'); }}><Text style={styles.drawModeText}>⬜ Tự do sáng tạo</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.drawModeBtn, { backgroundColor: '#60A5FA' }]} onPress={() => setMode('select_bg')}><Text style={styles.drawModeText}>🖼️ Tô màu theo mẫu</Text></TouchableOpacity>
       </View>
     );
   }
@@ -764,18 +665,14 @@ const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
   if (mode === 'select_bg') {
     return (
       <View style={[styles.gameContainer, { backgroundColor: '#EFF6FF' }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => setMode('menu')}>
-          <Ionicons name="arrow-back-circle" size={50} color="#3B82F6" />
-        </TouchableOpacity>
+        <TouchableOpacity style={styles.backBtn} onPress={() => setMode('menu')}><Ionicons name="arrow-back-circle" size={50} color="#3B82F6" /></TouchableOpacity>
         <Text style={[styles.drawMenuTitle, { marginTop: 80, color: '#1D4ED8' }]}>Chọn hình để tô màu nha</Text>
         {KHO_ANH_TO_MAU.length === 0 ? (
           <Text style={{ textAlign: 'center', marginTop: 50, fontSize: 18, color: 'gray' }}>Anh hai chưa thêm ảnh vào KHO_ANH_TO_MAU nè!</Text>
         ) : (
           <ScrollView contentContainerStyle={styles.bgSelectorGrid}>
             {KHO_ANH_TO_MAU.map((img, idx) => (
-              <TouchableOpacity key={idx} style={styles.bgThumbnail} onPress={() => { setSelectedBg(img); setMode('drawing'); }}>
-                <Image source={img} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-              </TouchableOpacity>
+              <TouchableOpacity key={idx} style={styles.bgThumbnail} onPress={() => { setSelectedBg(img); setMode('drawing'); }}><Image source={img} style={{ width: '100%', height: '100%' }} resizeMode="contain" /></TouchableOpacity>
             ))}
           </ScrollView>
         )}
@@ -783,7 +680,6 @@ const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
     );
   }
 
-  // TÈO ĐIỀU HƯỚNG TỰ ĐỘNG Ở ĐÂY NÈ!
   if (Platform.OS === 'web') {
     return <VeTranhGameWeb mode={mode} setMode={setMode} selectedBg={selectedBg} setSelectedBg={setSelectedBg} onBack={onBack} />;
   } else {
@@ -791,14 +687,9 @@ const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
   }
 };
 
-
-// ==========================================
-// MÀN HÌNH CHÍNH QUẢN LÝ CÁC TRÒ CHƠI
-// ==========================================
 export default function TroChoiHubScreen() {
   const { colors } = useTheme();
   const [maxLimit, setMaxLimit] = useState(10);
-  
   const [currentGame, setCurrentGame] = useState<'menu' | 'cho_an' | 'bap_benh' | 'dap_thu' | 'thu_thach' | 've_tranh'>('menu');
 
   useFocusEffect(
@@ -822,63 +713,28 @@ export default function TroChoiHubScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Rạp Xiếc Trò Chơi 🎪</Text>
-      </View>
-
+      <View style={styles.header}><Text style={styles.title}>Rạp Xiếc Trò Chơi 🎪</Text></View>
       <ScrollView contentContainerStyle={styles.menuContainer}>
-        {/* Game 1 */}
         <TouchableOpacity style={[styles.menuCard, { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' }]} onPress={() => setCurrentGame('cho_an')}>
-          <Text style={styles.menuIcon}>🐰</Text>
-          <View>
-            <Text style={[styles.menuTitle, { color: '#B45309' }]}>Cho Động Vật Ăn</Text>
-            <Text style={{ color: '#D97706', fontSize: 16 }}>Cho thú cưng ăn nào!</Text>
-          </View>
+          <Text style={styles.menuIcon}>🐰</Text><View><Text style={[styles.menuTitle, { color: '#B45309' }]}>Cho Động Vật Ăn</Text><Text style={{ color: '#D97706', fontSize: 16 }}>Cho thú cưng ăn nào!</Text></View>
         </TouchableOpacity>
-
-        {/* Game 2 */}
         <TouchableOpacity style={[styles.menuCard, { borderColor: '#3B82F6', backgroundColor: '#EFF6FF' }]} onPress={() => setCurrentGame('bap_benh')}>
-          <Text style={styles.menuIcon}>⚖️</Text>
-          <View>
-            <Text style={[styles.menuTitle, { color: '#1D4ED8' }]}>Bập Bênh Vật Lý</Text>
-            <Text style={{ color: '#2563EB', fontSize: 16 }}>Cân động vật cho bé</Text>
-          </View>
+          <Text style={styles.menuIcon}>⚖️</Text><View><Text style={[styles.menuTitle, { color: '#1D4ED8' }]}>Bập Bênh Vật Lý</Text><Text style={{ color: '#2563EB', fontSize: 16 }}>Cân động vật cho bé</Text></View>
         </TouchableOpacity>
-
-        {/* Game 3 */}
         <TouchableOpacity style={[styles.menuCard, { borderColor: '#10B981', backgroundColor: '#ECFDF5' }]} onPress={() => setCurrentGame('dap_thu')}>
-          <Text style={styles.menuIcon}>🐹</Text>
-          <View>
-            <Text style={[styles.menuTitle, { color: '#047857' }]}>Đập Thú Nhún</Text>
-            <Text style={{ color: '#059669', fontSize: 16 }}>Đập búa giải trí siêu tốc độ!</Text>
-          </View>
+          <Text style={styles.menuIcon}>🐹</Text><View><Text style={[styles.menuTitle, { color: '#047857' }]}>Đập Thú Nhún</Text><Text style={{ color: '#059669', fontSize: 16 }}>Đập búa giải trí siêu tốc độ!</Text></View>
         </TouchableOpacity>
-
-        {/* GAME 4: THỬ THÁCH VUI NHỘN */}
         <TouchableOpacity style={[styles.menuCard, { borderColor: '#EA580C', backgroundColor: '#FFF7ED' }]} onPress={() => setCurrentGame('thu_thach')}>
-          <Text style={styles.menuIcon}>🃏</Text>
-          <View>
-            <Text style={[styles.menuTitle, { color: '#C2410C' }]}>Thử Thách Vui Nhộn</Text>
-            <Text style={{ color: '#EA580C', fontSize: 16 }}>Quay xèng bốc thẻ làm nhiệm vụ!</Text>
-          </View>
+          <Text style={styles.menuIcon}>🃏</Text><View><Text style={[styles.menuTitle, { color: '#C2410C' }]}>Thử Thách Vui Nhộn</Text><Text style={{ color: '#EA580C', fontSize: 16 }}>Quay xèng bốc thẻ làm nhiệm vụ!</Text></View>
         </TouchableOpacity>
-
-        {/* GAME 5: BÉ TẬP VẼ */}
         <TouchableOpacity style={[styles.menuCard, { borderColor: '#C026D3', backgroundColor: '#FDF4FF' }]} onPress={() => setCurrentGame('ve_tranh')}>
-          <Text style={styles.menuIcon}>🎨</Text>
-          <View>
-            <Text style={[styles.menuTitle, { color: '#A21CAF' }]}>Bé Tập Vẽ</Text>
-            <Text style={{ color: '#C026D3', fontSize: 16 }}>Vẽ tự do & Tô màu hình!</Text>
-          </View>
+          <Text style={styles.menuIcon}>🎨</Text><View><Text style={[styles.menuTitle, { color: '#A21CAF' }]}>Bé Tập Vẽ</Text><Text style={{ color: '#C026D3', fontSize: 16 }}>Vẽ tự do & Tô màu hình!</Text></View>
         </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
-// ==========================================
-// KHO GIAO DIỆN (CSS) TÈO ĐÃ TÚT TÁT LẠI
-// ==========================================
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingVertical: 15, alignItems: 'center', backgroundColor: '#FEF08A', borderBottomWidth: 3, borderBottomColor: '#FDE047' },
@@ -887,11 +743,8 @@ const styles = StyleSheet.create({
   menuCard: { width: '45%', maxWidth: 350, flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 25, borderWidth: 4, elevation: 5 },
   menuIcon: { fontSize: 50, marginRight: 15 },
   menuTitle: { fontSize: 22, fontWeight: '900' },
-
   gameContainer: { flex: 1, overflow: 'hidden' },
   backBtn: { position: 'absolute', top: 20, left: 20, zIndex: 99, backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 30 },
-
-  // Game 1 Styles
   animalScreen: { width: '100%', aspectRatio: 16/9, backgroundColor: '#000', borderBottomWidth: 5, borderBottomColor: '#B45309', elevation: 10 },
   animalMedia: { width: '100%', height: '100%' },
   problemBoard: { alignSelf: 'center', marginTop: 40, backgroundColor: 'white', paddingHorizontal: 50, paddingVertical: 20, borderRadius: 30, borderWidth: 5, borderColor: '#3B82F6', elevation: 8 },
@@ -900,8 +753,6 @@ const styles = StyleSheet.create({
   foodItem: { alignItems: 'center', padding: 10 },
   foodEmoji: { fontSize: 80 },
   foodText: { fontSize: 40, fontWeight: '900', color: '#B45309', marginTop: -20, backgroundColor: 'white', borderRadius: 20, paddingHorizontal: 20, borderWidth: 4, borderColor: '#F59E0B', elevation: 5 },
-
-  // Game 2 Styles
   winTextHoanHo: { position: 'absolute', top: 80, alignSelf: 'center', fontSize: 35, fontWeight: '900', color: '#EF4444', textShadowColor: 'white', textShadowOffset: { width: 2, height: 2 }, textShadowRadius: 5, zIndex: 50 },
   seesawArea: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 },
   fulcrum: { position: 'absolute', bottom: '25%', borderBottomWidth: 60, borderBottomColor: '#B45309', borderLeftWidth: 30, borderLeftColor: 'transparent', borderRightWidth: 30, borderRightColor: 'transparent', zIndex: 2 },
@@ -925,8 +776,6 @@ const styles = StyleSheet.create({
   animalBadgeText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
   block3D: { width: 50, height: 50, borderRadius: 8, borderBottomWidth: 5, borderRightWidth: 3, borderTopWidth: 1, borderLeftWidth: 1, justifyContent: 'center', alignItems: 'center', elevation: 4 },
   block3DText: { fontSize: 24, fontWeight: '900', color: 'white', textShadowColor: 'black', textShadowOffset: {width: 1, height: 1}, textShadowRadius: 2 },
-
-  // Game 3 Styles
   whackHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 30, marginBottom: 20 },
   whackBackBtn: { position: 'absolute', left: 20, top: 0, zIndex: 10 },
   scoreBoardTop: { alignItems: 'center' },
@@ -947,8 +796,6 @@ const styles = StyleSheet.create({
   gameOverScore: { fontSize: 30, fontWeight: 'bold', color: '#B45309', marginBottom: 10 },
   replayBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B981', paddingHorizontal: 25, paddingVertical: 15, borderRadius: 20, borderWidth: 4, borderColor: '#047857', elevation: 5 },
   replayBtnText: { fontSize: 24, fontWeight: '900', color: 'white', marginLeft: 10 },
-
-  // Game 4 Styles
   thuThachTitle: { fontSize: 35, fontWeight: '900', color: '#C2410C', marginTop: 20, marginBottom: 20, textShadowColor: '#FDBA74', textShadowOffset: {width: 2, height: 2}, textShadowRadius: 1 },
   cardStage: { flex: 1, justifyContent: 'center', alignItems: 'center', width: '100%' },
   challengeCard: { width: 300, height: 400, backgroundColor: 'white', borderRadius: 20, borderWidth: 6, borderColor: '#EA580C', justifyContent: 'center', alignItems: 'center', elevation: 10, overflow: 'hidden' },
@@ -958,20 +805,15 @@ const styles = StyleSheet.create({
   thuThachControls: { padding: 30, width: '100%', alignItems: 'center' },
   spinBtn: { paddingVertical: 20, paddingHorizontal: 40, borderRadius: 30, borderWidth: 5, elevation: 8, shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.3, shadowRadius: 5 },
   spinBtnText: { fontSize: 26, fontWeight: '900', color: 'white' },
-
-  // Game 5 Styles (Vẽ Tranh)
   drawMenuTitle: { fontSize: 32, fontWeight: '900', color: '#A21CAF', marginBottom: 40, textAlign: 'center' },
   drawModeBtn: { paddingVertical: 20, paddingHorizontal: 40, borderRadius: 20, marginBottom: 20, width: 280, alignItems: 'center', elevation: 5 },
   drawModeText: { fontSize: 22, fontWeight: 'bold', color: 'white' },
   bgSelectorGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 20, justifyContent: 'center', gap: 15 },
   bgThumbnail: { width: 140, height: 140, backgroundColor: 'white', borderRadius: 15, borderWidth: 3, borderColor: '#93C5FD', overflow: 'hidden' },
-  
   drawHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingTop: 15, paddingBottom: 10, backgroundColor: 'white', borderBottomWidth: 2, borderColor: '#E5E7EB', zIndex: 10 },
   drawActionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#3B82F6', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
   drawActionText: { color: 'white', fontWeight: 'bold', marginLeft: 5 },
-  
   canvasArea: { flex: 1, backgroundColor: 'white' },
-  
   drawToolbar: { backgroundColor: 'white', paddingBottom: 25, paddingTop: 15, borderTopWidth: 2, borderColor: '#E5E7EB', elevation: 15 },
   drawToolsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15 },
   penTypeBtn: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 15, borderWidth: 2, borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' },
