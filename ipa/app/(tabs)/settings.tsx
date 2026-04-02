@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+// TÈO ĐÃ XÓA EXPO-FILE-SYSTEM ĐỂ DIỆT TẬN GỐC LỖI LƯU FILE
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
@@ -93,10 +93,11 @@ export default function SettingsScreen() {
       await AsyncStorage.setItem('@kho_du_lieu_cua_be', JSON.stringify(newData));
       setMediaData(newData);
     } catch (error) {
-      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được vào máy!');
+      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được danh sách ảnh vào máy!');
     }
   };
 
+  // TÈO ĐÃ TỐI ƯU HÀM THÊM ẢNH: DÙNG TRỰC TIẾP LINK GỐC KHÔNG CẦN COPY FILE
   const handleAddMedia = async () => {
     if (!activeCategory) return;
 
@@ -114,28 +115,10 @@ export default function SettingsScreen() {
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
-      let finalUri = asset.uri;
-
-      if (Platform.OS !== 'web') {
-        const fileName = asset.uri.split('/').pop() || `file_${Date.now()}`;
-        
-        // TÈO ÉP KIỂU Ở ĐÂY CHO TYPESCRIPT IM LẶNG 100%
-        const fsAny = FileSystem as any;
-        const docDir = fsAny.documentDirectory || '';
-        const newPath = `${docDir}${fileName}`;
-
-        try {
-          await fsAny.copyAsync({ from: asset.uri, to: newPath });
-          finalUri = newPath; 
-        } catch (error) {
-          Alert.alert('Lỗi', 'Copy file thất bại. Đại ca thử lại xem!');
-          return;
-        }
-      }
-
+      
       const newItem: CustomMedia = {
         id: Date.now().toString(),
-        uri: finalUri,
+        uri: asset.uri, // Lưu thẳng đường dẫn từ thư viện vào, không sợ lỗi FileSystem
         name: `Ảnh ${mediaData[activeCategory].length + 1}`,
         category: activeCategory,
         type: asset.type === 'video' ? 'video' : 'image',
@@ -143,6 +126,10 @@ export default function SettingsScreen() {
 
       const updatedData = { ...mediaData, [activeCategory]: [...mediaData[activeCategory], newItem] };
       await saveCustomMedia(updatedData);
+      
+      if (Platform.OS !== 'web') {
+        Alert.alert('Thành công', 'Đã thêm ảnh/video vào kho của bé Phương Linh!');
+      }
     }
   };
 
@@ -166,27 +153,19 @@ export default function SettingsScreen() {
     if (!selectedItem) return;
 
     const executeDelete = async () => {
-      try {
-        if (Platform.OS !== 'web') {
-            // TÈO ÉP KIỂU LÚC XÓA LUÔN NHA ĐẠI CA
-            const fsAny = FileSystem as any;
-            try { await fsAny.deleteAsync(selectedItem.uri, { idempotent: true }); } catch (e) {}
-        }
-        
-        const updatedCategoryList = mediaData[selectedItem.category].filter(item => item.id !== selectedItem.id);
-        const updatedData = { ...mediaData, [selectedItem.category]: updatedCategoryList };
-        
-        await saveCustomMedia(updatedData);
-        setSelectedItem(null); 
-      } catch (error) {
-        if (Platform.OS !== 'web') Alert.alert("Lỗi", "Không xóa được file!");
-      }
+      // Chỉ cần xóa khỏi danh sách AsyncStorage là xong, cực kỳ gọn lẹ!
+      const updatedCategoryList = mediaData[selectedItem.category].filter(item => item.id !== selectedItem.id);
+      const updatedData = { ...mediaData, [selectedItem.category]: updatedCategoryList };
+      
+      await saveCustomMedia(updatedData);
+      setSelectedItem(null); 
+      if (Platform.OS !== 'web') Alert.alert("Thành công", "Đã xóa file khỏi danh sách!");
     };
 
     if (Platform.OS !== 'web') {
         Alert.alert("Xóa Dữ Liệu", "Anh hai chắc chắn xóa file này không?", [
           { text: "Hủy", style: "cancel" },
-          { text: "Xóa Trắng", style: "destructive", onPress: executeDelete }
+          { text: "Xóa", style: "destructive", onPress: executeDelete }
         ]);
     } else {
         const confirmDelete = window.confirm("Chắc chắn xóa file này?");
