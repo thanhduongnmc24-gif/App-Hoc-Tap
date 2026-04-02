@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 
 import * as ImagePicker from 'expo-image-picker';
-// TÈO ĐÃ XÓA EXPO-FILE-SYSTEM ĐỂ DIỆT TẬN GỐC LỖI LƯU FILE
+import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
@@ -93,11 +93,10 @@ export default function SettingsScreen() {
       await AsyncStorage.setItem('@kho_du_lieu_cua_be', JSON.stringify(newData));
       setMediaData(newData);
     } catch (error) {
-      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được danh sách ảnh vào máy!');
+      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được vào máy!');
     }
   };
 
-  // TÈO ĐÃ TỐI ƯU HÀM THÊM ẢNH: DÙNG TRỰC TIẾP LINK GỐC KHÔNG CẦN COPY FILE
   const handleAddMedia = async () => {
     if (!activeCategory) return;
 
@@ -115,10 +114,38 @@ export default function SettingsScreen() {
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
-      
+      let finalUri = asset.uri;
+
+      // XỬ LÝ LƯU FILE TRÊN iOS CỰC KỲ CẨN THẬN
+      if (Platform.OS !== 'web') {
+        try {
+          // Lấy cái đuôi ảnh (jpg, png, heic...)
+          const extension = asset.uri.split('.').pop()?.split('?')[0] || 'jpg';
+          
+          // TẠO TÊN FILE MỚI SẠCH SẼ, KHÔNG DẤU CÁCH ĐỂ iOS KHÔNG BÁO LỖI
+          const safeFileName = `be_phuong_linh_${Date.now()}.${extension}`;
+          
+          // @ts-ignore
+          const docDir = FileSystem.documentDirectory;
+          if (!docDir) throw new Error("Không tìm thấy bộ nhớ nội bộ");
+          
+          const newPath = `${docDir}${safeFileName}`;
+
+          // @ts-ignore
+          await FileSystem.copyAsync({ from: asset.uri, to: newPath });
+          
+          // Ghi đè đường dẫn thật
+          finalUri = newPath; 
+
+        } catch (error: any) {
+          Alert.alert('Lỗi Lưu File', `Không thể lưu ảnh vào máy. Lỗi: ${error.message || error}`);
+          return;
+        }
+      }
+
       const newItem: CustomMedia = {
         id: Date.now().toString(),
-        uri: asset.uri, // Lưu thẳng đường dẫn từ thư viện vào, không sợ lỗi FileSystem
+        uri: finalUri,
         name: `Ảnh ${mediaData[activeCategory].length + 1}`,
         category: activeCategory,
         type: asset.type === 'video' ? 'video' : 'image',
@@ -127,9 +154,7 @@ export default function SettingsScreen() {
       const updatedData = { ...mediaData, [activeCategory]: [...mediaData[activeCategory], newItem] };
       await saveCustomMedia(updatedData);
       
-      if (Platform.OS !== 'web') {
-        Alert.alert('Thành công', 'Đã thêm ảnh/video vào kho của bé Phương Linh!');
-      }
+      if (Platform.OS !== 'web') Alert.alert('Thành công', 'Đã tải ảnh của bé vào kho!');
     }
   };
 
@@ -153,19 +178,29 @@ export default function SettingsScreen() {
     if (!selectedItem) return;
 
     const executeDelete = async () => {
-      // Chỉ cần xóa khỏi danh sách AsyncStorage là xong, cực kỳ gọn lẹ!
-      const updatedCategoryList = mediaData[selectedItem.category].filter(item => item.id !== selectedItem.id);
-      const updatedData = { ...mediaData, [selectedItem.category]: updatedCategoryList };
-      
-      await saveCustomMedia(updatedData);
-      setSelectedItem(null); 
-      if (Platform.OS !== 'web') Alert.alert("Thành công", "Đã xóa file khỏi danh sách!");
+      try {
+        if (Platform.OS !== 'web') {
+            try { 
+              // @ts-ignore
+              await FileSystem.deleteAsync(selectedItem.uri, { idempotent: true }); 
+            } catch (e) {}
+        }
+        
+        const updatedCategoryList = mediaData[selectedItem.category].filter(item => item.id !== selectedItem.id);
+        const updatedData = { ...mediaData, [selectedItem.category]: updatedCategoryList };
+        
+        await saveCustomMedia(updatedData);
+        setSelectedItem(null); 
+        if (Platform.OS !== 'web') Alert.alert("Thành công", "Đã xóa ảnh khỏi kho!");
+      } catch (error) {
+        if (Platform.OS !== 'web') Alert.alert("Lỗi", "Không xóa được file!");
+      }
     };
 
     if (Platform.OS !== 'web') {
         Alert.alert("Xóa Dữ Liệu", "Anh hai chắc chắn xóa file này không?", [
           { text: "Hủy", style: "cancel" },
-          { text: "Xóa", style: "destructive", onPress: executeDelete }
+          { text: "Xóa Trắng", style: "destructive", onPress: executeDelete }
         ]);
     } else {
         const confirmDelete = window.confirm("Chắc chắn xóa file này?");
