@@ -27,6 +27,8 @@ type Problem = {
 export default function LearningScreen() {
   const { colors } = useTheme();
   const [maxLimit, setMaxLimit] = useState(10);
+  const [mathType, setMathType] = useState('ca_hai'); // Lưu loại phép tính
+  
   const [problems, setProblems] = useState<Problem[]>([]);
   const [activeInputIndex, setActiveInputIndex] = useState<number | null>(null);
   
@@ -59,7 +61,7 @@ export default function LearningScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchLimit();
+      fetchSettings();
       fetchChildName(); 
     }, [])
   );
@@ -75,31 +77,28 @@ export default function LearningScreen() {
     }
   };
 
-  const fetchLimit = async () => {
+  const fetchSettings = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const { data } = await supabase.from('be_hoc_toan_data').select('max_limit').eq('user_id', user.id).single();
-      const fetchedLimit = data?.max_limit || 10;
+      const { data } = await supabase
+        .from('be_hoc_toan_data')
+        .select('max_limit, loai_phep_tinh')
+        .eq('user_id', user.id)
+        .single();
       
-      setMaxLimit(prevLimit => {
-        if (prevLimit !== fetchedLimit) {
-          setProblems(createNewProblems(fetchedLimit));
-          return fetchedLimit;
-        }
-        return prevLimit;
-      });
-
-      setProblems(prevProbs => {
-        if (prevProbs.length === 0) {
-          return createNewProblems(fetchedLimit);
-        }
-        return prevProbs;
-      });
+      const fetchedLimit = data?.max_limit || 10;
+      const fetchedType = data?.loai_phep_tinh || 'ca_hai';
+      
+      setMathType(fetchedType);
+      setMaxLimit(fetchedLimit);
+      
+      // Luôn tạo đề mới dựa trên cài đặt mới nhất từ mây
+      setProblems(createNewProblems(fetchedLimit, fetchedType));
     }
   };
 
-  // BỘ NÃO RA ĐỀ PHIÊN BẢN NÂNG CẤP V2 CỦA TÈO
-  const createNewProblems = (limit: number) => {
+  // BỘ NÃO RA ĐỀ PHIÊN BẢN V3 (Có đọc Cài Đặt) CỦA TÈO
+  const createNewProblems = (limit: number, type: string) => {
     setIsSubmitted(false);
     let additions: Problem[] = [];
     let subtractions: Problem[] = [];
@@ -107,9 +106,17 @@ export default function LearningScreen() {
 
     const safeLimit = Math.max(limit, 2);
 
-    // --- BƯỚC 1: TẠO ĐÚNG 5 PHÉP CỘNG ---
+    // Tính toán số lượng câu mỗi loại dựa trên cài đặt
+    let numAdd = 0;
+    let numSub = 0;
+    
+    if (type === 'cong') { numAdd = 10; }
+    else if (type === 'tru') { numSub = 10; }
+    else { numAdd = 5; numSub = 5; } // Mặc định là cả hai
+
+    // --- BƯỚC 1: TẠO PHÉP CỘNG ---
     let attempts = 0;
-    while (additions.length < 5 && attempts < 100) {
+    while (additions.length < numAdd && attempts < 100) {
       attempts++;
       let num1 = Math.floor(Math.random() * (safeLimit - 1)) + 1; 
       let num2 = Math.floor(Math.random() * (safeLimit - num1)) + 1; 
@@ -120,31 +127,28 @@ export default function LearningScreen() {
         additions.push({ id: 0, num1, num2, operator: '+', userAnswer: '' });
       }
     }
-    while (additions.length < 5) {
+    while (additions.length < numAdd) {
       let num1 = Math.floor(Math.random() * (safeLimit - 1)) + 1;
       let num2 = Math.floor(Math.random() * (safeLimit - num1)) + 1;
       additions.push({ id: 0, num1, num2, operator: '+', userAnswer: '' });
     }
 
-    // --- BƯỚC 2: TẠO ĐÚNG 5 PHÉP TRỪ ---
+    // --- BƯỚC 2: TẠO PHÉP TRỪ ---
     let hasZeroResultProblem = false; // Công tắc thần thánh giới hạn 1 câu = 0
     attempts = 0;
 
-    while (subtractions.length < 5 && attempts < 100) {
+    while (subtractions.length < numSub && attempts < 100) {
       attempts++;
       let num1 = Math.floor(Math.random() * safeLimit) + 1; 
       
-      // Nếu đã có 1 câu đáp án = 0 rồi thì số thứ nhất KHÔNG ĐƯỢC là 1
       if (hasZeroResultProblem && num1 === 1) {
          continue; 
       }
 
       let num2;
       if (hasZeroResultProblem) {
-         // Ép số thứ 2 nhỏ hơn số thứ 1 tuyệt đối (để đáp án luôn lớn hơn 0)
          num2 = Math.floor(Math.random() * (num1 - 1)) + 1;
       } else {
-         // Vẫn cho phép bốc số bằng nhau
          num2 = Math.floor(Math.random() * num1) + 1;
       }
       
@@ -153,18 +157,16 @@ export default function LearningScreen() {
         usedCombos.add(comboKey);
         subtractions.push({ id: 0, num1, num2, operator: '-', userAnswer: '' });
         
-        // Cập nhật công tắc nếu vừa thả 1 câu X - X = 0 vào rổ
         if (num1 === num2) {
            hasZeroResultProblem = true;
         }
       }
     }
 
-    // Đề phòng vòng lặp hết lượt chạy mà vẫn thiếu câu
-    while (subtractions.length < 5) {
+    while (subtractions.length < numSub) {
       let num1 = Math.floor(Math.random() * safeLimit) + 1;
       if (hasZeroResultProblem && num1 === 1) {
-         num1 = 2; // Đẩy lên 2 để có thể tạo câu 2 - 1 = 1
+         num1 = 2; 
       }
 
       let num2;
@@ -292,7 +294,7 @@ export default function LearningScreen() {
   };
 
   const handleReplay = () => {
-    setProblems(createNewProblems(maxLimit));
+    setProblems(createNewProblems(maxLimit, mathType));
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     setShowVideoPopup(false); 
   };

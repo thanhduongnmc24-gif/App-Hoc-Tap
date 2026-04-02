@@ -1,0 +1,11 @@
+lệnh đặt lại mật khẩu trên subarbase:
+  UPDATE auth.users
+  ET encrypted_password = crypt('mat_khau_moi_cua_dai_ca', gen_salt('bf'))
+ WHERE email = 'email_cua_dai_ca@gmail.com';
+
+THAO TÁC VỚI GITHUB
+ git add . && git commit -m "Cập nhật" && git push origin main
+LỆNH CHẠY THỬ
+ npx expo start -w
+LỆNH GÁN server subarbase
+ export DATABASE_URL="postgresql://postgres.zwzsmswhcvheyfyrzpgd:Nguyenthanhduong1511@aws-1-ap-south-1.pooler.supabase.com:6543/postgres"

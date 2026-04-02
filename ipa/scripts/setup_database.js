@@ -1,4 +1,3 @@
-// ipa/scripts/setup_be_hoc_toan.js
 const { Client } = require('pg');
 
 // Anh hai nhớ thay MẬT_KHẨU vào chuỗi này nhé, giữ nguyên connection string của tài khoản free là được!
@@ -16,38 +15,46 @@ const setupQuery = `
       user_id uuid REFERENCES auth.users NOT NULL,
       max_limit integer DEFAULT 10,
       total_score integer DEFAULT 0,
-      updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+      updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+      loai_phep_tinh TEXT DEFAULT 'ca_hai'
   );
+
+  -- 1.1 Ép thêm cột mới (Phòng trường hợp bảng đã tồn tại từ trước mà chưa có cột này)
+  ALTER TABLE be_hoc_toan_data ADD COLUMN IF NOT EXISTS loai_phep_tinh TEXT DEFAULT 'ca_hai';
 
   -- 2. Bật hàng rào bảo mật (Row Level Security)
   ALTER TABLE be_hoc_toan_data ENABLE ROW LEVEL SECURITY;
 
   -- 3. Ban hành luật: Tài khoản của ai thì người đó được xem, thêm, sửa
   -- Luật XEM
+  DROP POLICY IF EXISTS "Chủ tài khoản được xem" ON be_hoc_toan_data;
   CREATE POLICY "Chủ tài khoản được xem" ON be_hoc_toan_data 
       FOR SELECT USING (auth.uid() = user_id);
 
   -- Luật THÊM
+  DROP POLICY IF EXISTS "Chủ tài khoản được thêm" ON be_hoc_toan_data;
   CREATE POLICY "Chủ tài khoản được thêm" ON be_hoc_toan_data 
       FOR INSERT WITH CHECK (auth.uid() = user_id);
 
   -- Luật SỬA
+  DROP POLICY IF EXISTS "Chủ tài khoản được sửa" ON be_hoc_toan_data;
   CREATE POLICY "Chủ tài khoản được sửa" ON be_hoc_toan_data 
       FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
       
   -- Luật XÓA
+  DROP POLICY IF EXISTS "Chủ tài khoản được xóa" ON be_hoc_toan_data;
   CREATE POLICY "Chủ tài khoản được xóa" ON be_hoc_toan_data 
       FOR DELETE USING (auth.uid() = user_id);
 `;
 
 async function setupDatabase() {
   try {
-    console.log("⏳ Tèo đang xách vữa xây bảng 'be_hoc_toan_data' cho bé Phương Linh...");
+    console.log("⏳ Tèo đang xách vữa xây và nâng cấp bảng 'be_hoc_toan_data' cho bé Phương Linh...");
     await client.connect();
     
     await client.query(setupQuery);
     
-    console.log("✅ Ngon lành cành đào anh hai ơi! Bảng mới đã sẵn sàng, bảo mật RLS cũng đã được kích hoạt.");
+    console.log("✅ Ngon lành cành đào anh hai ơi! Bảng đã được cập nhật thêm cột 'loai_phep_tinh', bảo mật RLS cũng đã được gác cổng an toàn.");
   } catch (err) {
     console.error("❌ Ây da, có lỗi xây dựng rồi:", err);
   } finally {
