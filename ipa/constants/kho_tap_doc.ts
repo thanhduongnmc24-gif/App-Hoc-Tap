@@ -16,7 +16,7 @@ export const TAP_DOC_DATA = [
   { word: 'com-pa', image: require('../assets/images/anh_tap_doc/com-pa.png') },
   { word: 'con bò', image: require('../assets/images/anh_tap_doc/con bò.png') },
   { word: 'con bọ xít', image: require('../assets/images/anh_tap_doc/con bọ xít.png') },
-  { word: 'con bớm', image: require('../assets/images/anh_tap_doc/con bớm.png') },
+  { word: 'con bướm', image: require('../assets/images/anh_tap_doc/con bướm.png') },
   { word: 'con chó', image: require('../assets/images/anh_tap_doc/con chó.png') },
   { word: 'con cuốn chiếu', image: require('../assets/images/anh_tap_doc/con cuốn chiếu.png') },
   { word: 'con cừu', image: require('../assets/images/anh_tap_doc/con cừu.png') },
