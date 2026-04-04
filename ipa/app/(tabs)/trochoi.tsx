@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image, Animated, PanResponder, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image, Animated, PanResponder, ScrollView, Platform, Alert } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -10,9 +10,11 @@ import LottieView from 'lottie-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Slider from '@react-native-community/slider';
 
-// TÈO LOẠI BỎ HOÀN TOÀN SKIA VÌ KHÔNG CẦN THIẾT
-// CHUYỂN SANG DÙNG SVG THUẦN TÚY 100% - NHẸ MƯỢT, KHÔNG LỖI, CÓ HIỆU ỨNG NEON GLOW XỊN
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path as SvgPath } from 'react-native-svg';
+
+// THƯ VIỆN ĐỂ CHỤP VÀ LƯU ẢNH
+import { captureRef } from 'react-native-view-shot';
+import * as MediaLibrary from 'expo-media-library';
 
 import { KHO_DONG_VAT } from '../../constants/kho_dong_vat';
 import { LOTTIE_ANIMALS } from '../../constants/kho_lottie';
@@ -450,48 +452,48 @@ const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
 };
 
 // =========================================================
-// GAME 5: BÉ TẬP VẼ - DÙNG SVG THUẦN TÚY KHÔNG GÂY LỖI NATIVE
+// GAME 5: BÉ TẬP VẼ - BẢN ĐÃ CẬP NHẬT TẨY VÀ NÚT LƯU ẢNH
 // =========================================================
-const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
-  const [allToMau, setAllToMau] = useState<any[]>([]);
-  const [mode, setMode] = useState<'menu' | 'select_bg' | 'drawing'>('menu');
-  const [selectedBg, setSelectedBg] = useState<any>(null);
-
-  // Trạng thái vẽ
+const VeTranhGameContent = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allToMau }: any) => {
   const [paths, setPaths] = useState<any[]>([]);
   const [currentPath, setCurrentPath] = useState<any>(null);
   const [currentColor, setCurrentColor] = useState('#EF4444');
   const [strokeWidth, setStrokeWidth] = useState(8);
-  const [penType, setPenType] = useState<'thuong' | 'kim_tuyen'>('thuong');
-
-  useFocusEffect(useCallback(() => {
-    const load = async () => {
-      let custom: any[] = [];
-      try {
-        const stored = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.to_mau) custom = parsed.to_mau.map((item:any) => ({ uri: item.uri }));
-        }
-      } catch (e) {}
-      setAllToMau([...KHO_ANH_TO_MAU, ...custom]);
-    };
-    load();
-  }, []));
+  
+  // TÈO THÊM LOẠI BÚT 'tay' VÀO ĐÂY NHA ĐẠI CA
+  const [penType, setPenType] = useState<'thuong' | 'kim_tuyen' | 'tay'>('thuong');
+  
+  // REF CHO KHUNG VẼ ĐỂ CHỤP ẢNH LẠI
+  const canvasRef = useRef<View>(null);
 
   const undoLastPath = () => setPaths((prev) => prev.slice(0, -1));
   const clearAllPaths = () => setPaths([]);
 
-  if (mode === 'menu') {
-    return (
-      <View style={[styles.gameContainer, { backgroundColor: '#FDF4FF', justifyContent: 'center', alignItems: 'center' }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}><Ionicons name="arrow-back-circle" size={50} color="#C026D3" /></TouchableOpacity>
-        <Text style={styles.drawMenuTitle}>Bé Thích Vẽ Gì Nào? 🎨</Text>
-        <TouchableOpacity style={[styles.drawModeBtn, { backgroundColor: '#E879F9' }]} onPress={() => { setSelectedBg(null); setMode('drawing'); }}><Text style={styles.drawModeText}>⬜ Tự do sáng tạo</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.drawModeBtn, { backgroundColor: '#60A5FA' }]} onPress={() => setMode('select_bg')}><Text style={styles.drawModeText}>🖼️ Tô màu theo mẫu</Text></TouchableOpacity>
-      </View>
-    );
-  }
+  // HÀM LƯU ẢNH
+  const saveDrawing = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        window.alert("Tính năng lưu ảnh tạm thời chỉ hỗ trợ trên Điện thoại/Máy tính bảng nha đại ca!");
+        return;
+      }
+      
+      const permission = await MediaLibrary.requestPermissionsAsync();
+      if (permission.status !== 'granted') {
+         Alert.alert("Cấp quyền", "Cho Tèo xin quyền lưu ảnh vào máy nha!");
+         return;
+      }
+      
+      const localUri = await captureRef(canvasRef, {
+        format: 'png',
+        quality: 1,
+      });
+      
+      await MediaLibrary.saveToLibraryAsync(localUri);
+      Alert.alert("Thành công", "Đã lưu tác phẩm nghệ thuật của bé vào thư viện ảnh! 🎉");
+    } catch (e) {
+      Alert.alert("Lỗi", "Không lưu được ảnh rồi đại ca ơi!");
+    }
+  };
 
   if (mode === 'select_bg') {
     return (
@@ -518,13 +520,16 @@ const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
       <View style={styles.drawHeader}>
         <TouchableOpacity onPress={() => { setMode('menu'); clearAllPaths(); }}><Ionicons name="arrow-back-circle" size={45} color="#4B5563" /></TouchableOpacity>
         <Text style={{fontWeight: 'bold', color: 'gray'}}>Bé Sáng Tạo (Neon Glow ✨)</Text>
-        <View style={{ flexDirection: 'row', gap: 15 }}>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
           <TouchableOpacity style={styles.drawActionBtn} onPress={undoLastPath}><Ionicons name="arrow-undo" size={24} color="white" /><Text style={styles.drawActionText}>Hoàn tác</Text></TouchableOpacity>
           <TouchableOpacity style={[styles.drawActionBtn, { backgroundColor: '#EF4444' }]} onPress={clearAllPaths}><Ionicons name="trash" size={24} color="white" /><Text style={styles.drawActionText}>Xóa hết</Text></TouchableOpacity>
+          {/* NÚT LƯU ẢNH XANH LÁ CÂY */}
+          <TouchableOpacity style={[styles.drawActionBtn, { backgroundColor: '#10B981' }]} onPress={saveDrawing}><Ionicons name="save" size={24} color="white" /><Text style={styles.drawActionText}>Lưu</Text></TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.canvasArea}>
+      {/* THÊM collapsable={false} ĐỂ CHỤP ẢNH KHÔNG BỊ LỖI TRÊN ANDROID */}
+      <View style={styles.canvasArea} ref={canvasRef} collapsable={false}>
         {selectedBg && <Image source={selectedBg} style={StyleSheet.absoluteFillObject} resizeMode="contain" />}
         <View style={StyleSheet.absoluteFillObject} 
           onStartShouldSetResponder={() => true} 
@@ -542,37 +547,36 @@ const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
             if (currentPath) { setPaths((prev) => [...prev, currentPath]); setCurrentPath(null); }
           }}
         >
-          {/* TÈO CODE NEON GLOW CHUẨN 100% SVG ĐÂY NHA ĐẠI CA */}
           <Svg style={{ flex: 1 }}>
-            {/* Lớp mờ phát sáng (chỉ vẽ cho kim_tuyen) */}
-            {paths.map((p, index) => p.type === 'kim_tuyen' && (
-              <Path key={`glow_${index}`} d={p.d} stroke={p.color} strokeWidth={p.strokeWidth * 2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.3} />
-            ))}
-            {currentPath?.type === 'kim_tuyen' && (
-              <Path d={currentPath.d} stroke={currentPath.color} strokeWidth={currentPath.strokeWidth * 2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.3} />
-            )}
-            
-            {/* Lớp lõi sắc nét (kim_tuyen thì màu trắng và nhỏ hơn, thường thì lấy đúng màu) */}
             {paths.map((p, index) => (
-              <Path 
-                key={`core_${index}`} 
-                d={p.d} 
-                stroke={p.type === 'kim_tuyen' ? '#FFFFFF' : p.color} 
-                strokeWidth={p.type === 'kim_tuyen' ? p.strokeWidth * 0.4 : p.strokeWidth} 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                fill="none" 
-              />
+              <React.Fragment key={index}>
+                {p.type === 'tay' ? (
+                  /* NẾU LÀ CỤC TẨY THÌ VẼ NÉT TRẮNG, TO GẤP ĐÔI BÌNH THƯỜNG */
+                  <SvgPath d={p.d} stroke="#FFFFFF" strokeWidth={p.strokeWidth * 2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                ) : p.type === 'kim_tuyen' ? (
+                  <React.Fragment>
+                    <SvgPath d={p.d} stroke={p.color} strokeWidth={p.strokeWidth * 2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.3} />
+                    <SvgPath d={p.d} stroke="#FFFFFF" strokeWidth={p.strokeWidth * 0.4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  </React.Fragment>
+                ) : (
+                  <SvgPath d={p.d} stroke={p.color} strokeWidth={p.strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                )}
+              </React.Fragment>
             ))}
+            
             {currentPath && (
-              <Path 
-                d={currentPath.d} 
-                stroke={currentPath.type === 'kim_tuyen' ? '#FFFFFF' : currentPath.color} 
-                strokeWidth={currentPath.type === 'kim_tuyen' ? currentPath.strokeWidth * 0.4 : currentPath.strokeWidth} 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                fill="none" 
-              />
+              <React.Fragment>
+                {currentPath.type === 'tay' ? (
+                  <SvgPath d={currentPath.d} stroke="#FFFFFF" strokeWidth={currentPath.strokeWidth * 2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                ) : currentPath.type === 'kim_tuyen' ? (
+                  <React.Fragment>
+                    <SvgPath d={currentPath.d} stroke={currentPath.color} strokeWidth={currentPath.strokeWidth * 2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.3} />
+                    <SvgPath d={currentPath.d} stroke="#FFFFFF" strokeWidth={currentPath.strokeWidth * 0.4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  </React.Fragment>
+                ) : (
+                  <SvgPath d={currentPath.d} stroke={currentPath.color} strokeWidth={currentPath.strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                )}
+              </React.Fragment>
             )}
           </Svg>
         </View>
@@ -583,15 +587,31 @@ const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <TouchableOpacity style={[styles.penTypeBtn, penType === 'thuong' && styles.penTypeActive]} onPress={() => setPenType('thuong')}><Text style={{ fontSize: 16 }}>✏️ Thường</Text></TouchableOpacity>
             <TouchableOpacity style={[styles.penTypeBtn, penType === 'kim_tuyen' && styles.penTypeActive]} onPress={() => setPenType('kim_tuyen')}><Text style={{ fontSize: 16 }}>✨ Kim Tuyến</Text></TouchableOpacity>
+            {/* TÈO GẮN NÚT CỤC TẨY VÀO ĐÂY NHA */}
+            <TouchableOpacity style={[styles.penTypeBtn, penType === 'tay' && styles.penTypeActive]} onPress={() => setPenType('tay')}><Text style={{ fontSize: 16 }}>🧽 Cục Tẩy</Text></TouchableOpacity>
           </View>
           <View style={styles.sliderContainer}>
             <Text style={{ fontWeight: 'bold', color: '#4B5563' }}>Nét to nhỏ:</Text>
-            <Slider style={{ width: 150, height: 40 }} minimumValue={2} maximumValue={30} value={strokeWidth} onValueChange={setStrokeWidth} minimumTrackTintColor="#3B82F6" thumbTintColor="#2563EB" />
+            <Slider style={{ width: 120, height: 40 }} minimumValue={2} maximumValue={30} value={strokeWidth} onValueChange={setStrokeWidth} minimumTrackTintColor="#3B82F6" thumbTintColor="#2563EB" />
           </View>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorPalette}>
           {BUBBLE_COLORS.map((c) => (
-            <TouchableOpacity key={c} style={[styles.colorBubble, { backgroundColor: c }, currentColor === c && styles.colorBubbleActive ]} onPress={() => setCurrentColor(c)} />
+            <TouchableOpacity 
+              key={c} 
+              style={[
+                styles.colorBubble, 
+                { backgroundColor: c }, 
+                // TÈO SỬA VIỀN CHO MÀU TRẮNG Ở ĐÂY NÈ
+                c === '#FFFFFF' && { borderColor: '#D1D5DB' },
+                currentColor === c && styles.colorBubbleActive 
+              ]} 
+              onPress={() => {
+                setCurrentColor(c);
+                // Nếu đang dùng tẩy mà bấm chọn màu thì tự động quay về bút thường
+                if (penType === 'tay') setPenType('thuong');
+              }} 
+            />
           ))}
         </ScrollView>
       </View>
@@ -599,9 +619,41 @@ const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
   );
 };
 
-// ==========================================
-// MÀN HÌNH CHÍNH QUẢN LÝ CÁC TRÒ CHƠI
-// ==========================================
+const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
+  const [allToMau, setAllToMau] = useState<any[]>([]);
+  const [mode, setMode] = useState<'menu' | 'select_bg' | 'drawing'>('menu');
+  const [selectedBg, setSelectedBg] = useState<any>(null);
+
+  useFocusEffect(useCallback(() => {
+    const load = async () => {
+      let custom: any[] = [];
+      try {
+        const stored = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.to_mau) custom = parsed.to_mau.map((item:any) => ({ uri: item.uri }));
+        }
+      } catch (e) {}
+      setAllToMau([...KHO_ANH_TO_MAU, ...custom]);
+    };
+    load();
+  }, []));
+
+  if (mode === 'menu') {
+    return (
+      <View style={[styles.gameContainer, { backgroundColor: '#FDF4FF', justifyContent: 'center', alignItems: 'center' }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={onBack}><Ionicons name="arrow-back-circle" size={50} color="#C026D3" /></TouchableOpacity>
+        <Text style={styles.drawMenuTitle}>Bé Thích Vẽ Gì Nào? 🎨</Text>
+        <TouchableOpacity style={[styles.drawModeBtn, { backgroundColor: '#E879F9' }]} onPress={() => { setSelectedBg(null); setMode('drawing'); }}><Text style={styles.drawModeText}>⬜ Tự do sáng tạo</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.drawModeBtn, { backgroundColor: '#60A5FA' }]} onPress={() => setMode('select_bg')}><Text style={styles.drawModeText}>🖼️ Tô màu theo mẫu</Text></TouchableOpacity>
+      </View>
+    );
+  }
+
+  // BÂY GIỜ CHỈ CẦN 1 COMPONENT DUY NHẤT LÀ ĐỦ CÂN HẾT WEB LẪN APP RỒI NHA ĐẠI CA
+  return <VeTranhGameContent mode={mode} setMode={setMode} selectedBg={selectedBg} setSelectedBg={setSelectedBg} onBack={onBack} allToMau={allToMau} />;
+};
+
 export default function TroChoiHubScreen() {
   const { colors } = useTheme();
   const [maxLimit, setMaxLimit] = useState(10);
@@ -731,7 +783,7 @@ const styles = StyleSheet.create({
   canvasArea: { flex: 1, backgroundColor: 'white' },
   drawToolbar: { backgroundColor: 'white', paddingBottom: 25, paddingTop: 15, borderTopWidth: 2, borderColor: '#E5E7EB', elevation: 15 },
   drawToolsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15 },
-  penTypeBtn: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 15, borderWidth: 2, borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' },
+  penTypeBtn: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 15, borderWidth: 2, borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' },
   penTypeActive: { borderColor: '#3B82F6', backgroundColor: '#EFF6FF' },
   sliderContainer: { flexDirection: 'row', alignItems: 'center' },
   colorPalette: { paddingHorizontal: 15, gap: 12, alignItems: 'center' },
