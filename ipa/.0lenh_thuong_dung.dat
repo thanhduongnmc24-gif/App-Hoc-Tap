@@ -5,6 +5,7 @@ lệnh đặt lại mật khẩu trên subarbase:
 
 THAO TÁC VỚI GITHUB
  git add . && git commit -m "Cập nhật" && git push origin main
+ git pull origin main // Lấy dữ liệu từ github về codespace
 LỆNH CHẠY THỬ
  npx expo start -w
 LỆNH GÁN server subarbase
