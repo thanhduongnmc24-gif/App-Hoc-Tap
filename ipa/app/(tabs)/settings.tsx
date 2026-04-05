@@ -6,25 +6,34 @@ import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 
 import * as ImagePicker from 'expo-image-picker';
-// TÈO GỌI LẠI FILE SYSTEM ĐỂ LƯU ẢNH VĨNH VIỄN KHÔNG BỊ ĐEN THUI NỮA
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+// IMPORT BỘ PHÁT VIDEO ĐỂ XEM THỬ
+import { Video, ResizeMode } from 'expo-av';
+
+import { TAP_DOC_DATA } from '../../constants/kho_tap_doc';
+import { THU_THACH_IMAGES, GIOI_IMAGES, TOT_IMAGES } from '../../constants/kho_anh';
+import { GIOI_VIDEOS, TOT_VIDEOS } from '../../constants/kho_video';
 
 const { width } = Dimensions.get('window');
 
 type MathType = 'cong' | 'tru' | 'ca_hai';
-type MediaType = 'to_mau' | 'tinh_diem' | 'tap_doc' | 'thu_thach';
-interface CustomMedia {
+// TÈO THÊM DANH MỤC VIDEO VÀO ĐÂY
+type MediaType = 'to_mau' | 'tinh_diem' | 'tap_doc' | 'thu_thach' | 'video_chuc_mung';
+
+interface MediaItem {
   id: string;
-  uri: string;
+  uri: any;
   name: string;
   category: MediaType;
   type: 'image' | 'video';
+  isDefault: boolean;
 }
 
 const CATEGORY_NAMES = {
   to_mau: '🎨 Ảnh Tô Màu',
   tinh_diem: '💯 Ảnh Tính Điểm',
+  video_chuc_mung: '🎬 Video Chúc Mừng',
   tap_doc: '📚 Ảnh Tập Đọc',
   thu_thach: '🎲 Ảnh Thử Thách',
 };
@@ -38,17 +47,24 @@ export default function SettingsScreen() {
 
   const isDarkMode = theme === 'dark';
 
-  const [mediaData, setMediaData] = useState<Record<MediaType, CustomMedia[]>>({
-    to_mau: [], tinh_diem: [], tap_doc: [], thu_thach: []
-  });
+  const [customMedia, setCustomMedia] = useState<Record<MediaType, MediaItem[]>>({ to_mau: [], tinh_diem: [], video_chuc_mung: [], tap_doc: [], thu_thach: [] });
+  const [deletedDefaults, setDeletedDefaults] = useState<string[]>([]);
+  const [renamedDefaults, setRenamedDefaults] = useState<Record<string, string>>({});
   
   const [activeCategory, setActiveCategory] = useState<MediaType | null>(null);
-  const [selectedItem, setSelectedItem] = useState<CustomMedia | null>(null);
+  const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [editName, setEditName] = useState('');
+
+  const getFullUri = (uri: string) => {
+    if (!uri) return '';
+    if (Platform.OS === 'web' || uri.startsWith('http') || uri.startsWith('file://') || uri.startsWith('data:') || uri.startsWith('blob:')) return uri;
+    const fsAny = FileSystem as any;
+    return `${fsAny.documentDirectory}${uri}`;
+  };
 
   useEffect(() => {
     fetchSettings();
-    loadCustomMedia();
+    loadAllMediaState();
   }, []);
 
   const fetchSettings = async () => {
@@ -56,107 +72,113 @@ export default function SettingsScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data } = await supabase.from('be_hoc_toan_data').select('max_limit, loai_phep_tinh').eq('user_id', user.id).single();
-        if (data) {
-          setMaxLimit(data.max_limit || 10);
-          setMathType((data.loai_phep_tinh as MathType) || 'ca_hai');
-        }
+        if (data) { setMaxLimit(data.max_limit || 10); setMathType((data.loai_phep_tinh as MathType) || 'ca_hai'); }
       }
-    } catch (error) {
-      console.log('Lỗi lấy cài đặt:', error);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) {} finally { setLoading(false); }
   };
 
   const updateSettings = async (newLimit: number, newType: MathType) => {
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('be_hoc_toan_data').update({ max_limit: newLimit, loai_phep_tinh: newType }).eq('user_id', user.id);
-      }
-    } catch (error) {
-      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được cài đặt!');
-    } finally {
-      setSaving(false);
-    }
+      if (user) await supabase.from('be_hoc_toan_data').update({ max_limit: newLimit, loai_phep_tinh: newType }).eq('user_id', user.id);
+    } catch (error) {} finally { setSaving(false); }
   };
 
-  const loadCustomMedia = async () => {
+  const loadAllMediaState = async () => {
     try {
-      const storedData = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
-      if (storedData) setMediaData(JSON.parse(storedData));
+      const storedCustom = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
+      const storedDeleted = await AsyncStorage.getItem('@deleted_defaults');
+      const storedRenamed = await AsyncStorage.getItem('@renamed_defaults');
+
+      if (storedCustom) setCustomMedia(JSON.parse(storedCustom));
+      if (storedDeleted) setDeletedDefaults(JSON.parse(storedDeleted));
+      if (storedRenamed) setRenamedDefaults(JSON.parse(storedRenamed));
     } catch (error) {}
   };
 
-  const saveCustomMedia = async (newData: Record<MediaType, CustomMedia[]>) => {
-    try {
-      await AsyncStorage.setItem('@kho_du_lieu_cua_be', JSON.stringify(newData));
-      setMediaData(newData);
-    } catch (error) {
-      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được vào máy!');
+  const getCombinedMedia = (category: MediaType): MediaItem[] => {
+    let defaults: MediaItem[] = [];
+    
+    if (category === 'tap_doc') {
+      defaults = (TAP_DOC_DATA || []).map((item, idx) => ({ id: `default_tapdoc_${idx}`, uri: item.image, name: item.word, category, type: 'image' as const, isDefault: true }));
+    } else if (category === 'thu_thach') {
+      defaults = (THU_THACH_IMAGES || []).map((img, idx) => ({ id: `default_thuthach_${idx}`, uri: img, name: `Thử Thách ${idx + 1}`, category, type: 'image' as const, isDefault: true }));
+    } else if (category === 'tinh_diem') {
+      const imgsGioi = (GIOI_IMAGES || []).map((img, idx) => ({ id: `default_tinhdiem_ig_${idx}`, uri: img, name: `Ảnh Giỏi ${idx + 1}`, category, type: 'image' as const, isDefault: true }));
+      const imgsTot = (TOT_IMAGES || []).map((img, idx) => ({ id: `default_tinhdiem_it_${idx}`, uri: img, name: `Ảnh Tốt ${idx + 1}`, category, type: 'image' as const, isDefault: true }));
+      defaults = [...imgsGioi, ...imgsTot];
+    } else if (category === 'video_chuc_mung') {
+      const vidsGioi = (GIOI_VIDEOS || []).map((vid, idx) => ({ id: `default_video_vg_${idx}`, uri: vid, name: `Video Giỏi ${idx + 1}`, category, type: 'video' as const, isDefault: true }));
+      const vidsTot = (TOT_VIDEOS || []).map((vid, idx) => ({ id: `default_video_vt_${idx}`, uri: vid, name: `Video Tốt ${idx + 1}`, category, type: 'video' as const, isDefault: true }));
+      defaults = [...vidsGioi, ...vidsTot];
     }
+
+    const filteredDefaults = defaults.filter(item => !deletedDefaults.includes(item.id));
+    const renamedFilteredDefaults = filteredDefaults.map(item => ({ ...item, name: renamedDefaults[item.id] || item.name }));
+
+    return [...renamedFilteredDefaults, ...(customMedia[category] || [])];
   };
 
   const handleAddMedia = async () => {
     if (!activeCategory) return;
-
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted === false) {
-      if (Platform.OS !== 'web') Alert.alert("Cấp quyền", "Cho Tèo xin quyền vào kho ảnh nha!");
-      return;
-    }
+    if (permissionResult.granted === false) return;
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: false,
-      quality: 0.8,
+    // Phân loại: Nếu đang ở mục video thì ưu tiên chọn video, còn lại chọn ảnh
+    const isVideoCategory = activeCategory === 'video_chuc_mung';
+    
+    const result = await ImagePicker.launchImageLibraryAsync({ 
+      mediaTypes: isVideoCategory ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images, 
+      allowsEditing: false, 
+      quality: 0.8 
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
-      let finalUri = asset.uri;
+      let finalUri: string = asset.uri;
 
-      // TÈO BẬT LẠI COPY FILE VĨNH VIỄN ĐỂ KHÔNG BỊ ĐEN THUI NHA ĐẠI CA
       if (Platform.OS !== 'web') {
+        const fsAny = FileSystem as any;
+        const extension = isVideoCategory ? '.mp4' : '.jpg';
+        const fileName = asset.uri.split('/').pop() || `file_${Date.now()}${extension}`;
+        const newPath = `${fsAny.documentDirectory}${fileName}`;
         try {
-          const fileName = asset.uri.split('/').pop() || `img_${Date.now()}.jpg`;
-          const newPath = `${FileSystem.documentDirectory}${fileName}`;
-          await FileSystem.copyAsync({ from: asset.uri, to: newPath });
-          finalUri = newPath; 
-        } catch (error) {
-          console.log('Lỗi copy file (dùng tạm link gốc):', error);
-          // Nếu lỡ xui rủi copy không được thì vẫn có link gốc xài đỡ
-        }
+          await fsAny.copyAsync({ from: asset.uri, to: newPath });
+          finalUri = fileName; 
+        } catch (error) { return; }
       }
 
-      const newItem: CustomMedia = {
-        id: Date.now().toString(),
+      const newItem: MediaItem = {
+        id: `custom_${Date.now()}`,
         uri: finalUri,
-        name: `Ảnh ${mediaData[activeCategory].length + 1}`,
+        name: isVideoCategory ? `Video Mới` : `Ảnh Mới`,
         category: activeCategory,
-        type: asset.type === 'video' ? 'video' : 'image',
+        type: isVideoCategory ? 'video' : 'image',
+        isDefault: false
       };
 
-      const updatedData = { ...mediaData, [activeCategory]: [...mediaData[activeCategory], newItem] };
-      await saveCustomMedia(updatedData);
-      
-      if (Platform.OS !== 'web') Alert.alert('Thành công', 'Đã lưu ảnh vĩnh viễn vào app!');
+      const updatedCustom = { ...customMedia, [activeCategory]: [...(customMedia[activeCategory] || []), newItem] };
+      setCustomMedia(updatedCustom);
+      await AsyncStorage.setItem('@kho_du_lieu_cua_be', JSON.stringify(updatedCustom));
     }
   };
 
   const handleRename = async () => {
     if (!selectedItem || !editName.trim()) return;
 
-    const updatedCategoryList = mediaData[selectedItem.category].map(item => 
-      item.id === selectedItem.id ? { ...item, name: editName.trim() } : item
-    );
-
-    const updatedData = { ...mediaData, [selectedItem.category]: updatedCategoryList };
-    await saveCustomMedia(updatedData);
+    if (selectedItem.isDefault) {
+      const newRenamed = { ...renamedDefaults, [selectedItem.id]: editName.trim() };
+      setRenamedDefaults(newRenamed);
+      await AsyncStorage.setItem('@renamed_defaults', JSON.stringify(newRenamed));
+    } else {
+      const updatedList = customMedia[selectedItem.category].map(item => item.id === selectedItem.id ? { ...item, name: editName.trim() } : item);
+      const updatedCustom = { ...customMedia, [selectedItem.category]: updatedList };
+      setCustomMedia(updatedCustom);
+      await AsyncStorage.setItem('@kho_du_lieu_cua_be', JSON.stringify(updatedCustom));
+    }
     
     setSelectedItem({ ...selectedItem, name: editName.trim() });
-    
     if (Platform.OS !== 'web') Alert.alert('Thành công', 'Đã đổi tên mượt mà!');
     else window.alert('Đã đổi tên mượt mà!'); 
   };
@@ -165,34 +187,35 @@ export default function SettingsScreen() {
     if (!selectedItem) return;
 
     const executeDelete = async () => {
-      try {
+      if (selectedItem.isDefault) {
+        const newDeleted = [...deletedDefaults, selectedItem.id];
+        setDeletedDefaults(newDeleted);
+        await AsyncStorage.setItem('@deleted_defaults', JSON.stringify(newDeleted));
+      } else {
         if (Platform.OS !== 'web') {
-            try { await FileSystem.deleteAsync(selectedItem.uri, { idempotent: true }); } catch (e) {}
+            const fsAny = FileSystem as any;
+            try { await fsAny.deleteAsync(getFullUri(selectedItem.uri as string), { idempotent: true }); } catch (e) {}
         }
-        
-        const updatedCategoryList = mediaData[selectedItem.category].filter(item => item.id !== selectedItem.id);
-        const updatedData = { ...mediaData, [selectedItem.category]: updatedCategoryList };
-        
-        await saveCustomMedia(updatedData);
-        setSelectedItem(null); 
-        if (Platform.OS !== 'web') Alert.alert("Thành công", "Đã xóa ảnh!");
-      } catch (error) {
-        if (Platform.OS !== 'web') Alert.alert("Lỗi", "Không xóa được file!");
+        const updatedList = customMedia[selectedItem.category].filter(item => item.id !== selectedItem.id);
+        const updatedCustom = { ...customMedia, [selectedItem.category]: updatedList };
+        setCustomMedia(updatedCustom);
+        await AsyncStorage.setItem('@kho_du_lieu_cua_be', JSON.stringify(updatedCustom));
       }
+      setSelectedItem(null); 
     };
 
     if (Platform.OS !== 'web') {
-        Alert.alert("Xóa Dữ Liệu", "Anh hai chắc chắn xóa file này không?", [
-          { text: "Hủy", style: "cancel" },
-          { text: "Xóa", style: "destructive", onPress: executeDelete }
+        Alert.alert("Xóa Dữ Liệu", selectedItem.isDefault ? "Ẩn hình/video mặc định này khỏi trò chơi?" : "Chắc chắn xóa file này khỏi máy?", [
+          { text: "Hủy", style: "cancel" }, { text: "Xóa", style: "destructive", onPress: executeDelete }
         ]);
     } else {
-        const confirmDelete = window.confirm("Chắc chắn xóa file này?");
-        if (confirmDelete) executeDelete();
+        if (window.confirm("Chắc chắn xóa/ẩn file này?")) executeDelete();
     }
   };
 
   if (loading) return <View style={[styles.container, { backgroundColor: colors.bg, justifyContent: 'center' }]}><ActivityIndicator size="large" color="#4F46E5" /></View>;
+
+  const combinedMediaList = activeCategory ? getCombinedMedia(activeCategory) : [];
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -206,19 +229,20 @@ export default function SettingsScreen() {
           <Text style={{ fontSize: 24, marginRight: 10 }}>🎁</Text>
           <View>
             <Text style={[styles.sectionTitle, { color: '#166534', marginBottom: 0 }]}>Kho Dữ Liệu Của Bé</Text>
-            <Text style={{ color: '#15803D', fontSize: 12 }}>Thêm ảnh gia đình vào game</Text>
+            <Text style={{ color: '#15803D', fontSize: 12 }}>Quản lý ảnh/video mặc định & tải lên</Text>
           </View>
         </View>
 
         <View style={styles.mediaGrid}>
-          {(Object.keys(CATEGORY_NAMES) as MediaType[]).map((key) => (
-            <TouchableOpacity key={key} style={styles.mediaCategoryBtn} onPress={() => setActiveCategory(key)}>
-              <Text style={styles.mediaCategoryTitle}>{CATEGORY_NAMES[key]}</Text>
-              <View style={styles.mediaBadge}>
-                <Text style={styles.mediaBadgeText}>{mediaData[key].length}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+          {(Object.keys(CATEGORY_NAMES) as MediaType[]).map((key) => {
+             const totalItems = getCombinedMedia(key).length;
+             return (
+              <TouchableOpacity key={key} style={styles.mediaCategoryBtn} onPress={() => setActiveCategory(key)}>
+                <Text style={styles.mediaCategoryTitle}>{CATEGORY_NAMES[key]}</Text>
+                <View style={styles.mediaBadge}><Text style={styles.mediaBadgeText}>{totalItems}</Text></View>
+              </TouchableOpacity>
+            )
+          })}
         </View>
       </View>
 
@@ -239,15 +263,8 @@ export default function SettingsScreen() {
           <Text style={[styles.limitLabel, { color: colors.text }]}>Bé làm toán từ 1 đến:</Text>
           <TextInput
             style={styles.limitInput} keyboardType="number-pad" value={maxLimit ? String(maxLimit) : ''}
-            onChangeText={(text) => {
-              const val = parseInt(text.replace(/[^0-9]/g, ''), 10);
-              setMaxLimit(isNaN(val) ? 0 : val);
-            }}
-            onEndEditing={() => {
-              let finalLimit = maxLimit < 5 ? 5 : maxLimit;
-              setMaxLimit(finalLimit);
-              updateSettings(finalLimit, mathType);
-            }}
+            onChangeText={(text) => { const val = parseInt(text.replace(/[^0-9]/g, ''), 10); setMaxLimit(isNaN(val) ? 0 : val); }}
+            onEndEditing={() => { let finalLimit = maxLimit < 5 ? 5 : maxLimit; setMaxLimit(finalLimit); updateSettings(finalLimit, mathType); }}
           />
         </View>
       </View>
@@ -261,42 +278,55 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* ============================================================= */}
-      {/* TÈO ĐÃ NHÉT CÁI BẢNG CHI TIẾT VÀO CHUNG MODAL NÀY ĐỂ TRỊ LỖI CHỚP TẮT TRÊN IOS */}
-      {/* ============================================================= */}
       <Modal visible={activeCategory !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { setActiveCategory(null); setSelectedItem(null); }}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{activeCategory ? CATEGORY_NAMES[activeCategory] : ''}</Text>
-            <TouchableOpacity onPress={() => { setActiveCategory(null); setSelectedItem(null); }} style={styles.closeBtn}>
-              <Ionicons name="close-circle" size={32} color="#6B7280" />
-            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setActiveCategory(null); setSelectedItem(null); }} style={styles.closeBtn}><Ionicons name="close-circle" size={32} color="#6B7280" /></TouchableOpacity>
           </View>
           
           <ScrollView contentContainerStyle={styles.galleryGrid}>
             <TouchableOpacity style={styles.addMediaBtn} onPress={handleAddMedia}>
-              <Ionicons name="add" size={40} color="#4F46E5" />
+              <Ionicons name={activeCategory === 'video_chuc_mung' ? "videocam" : "image"} size={40} color="#4F46E5" />
               <Text style={{color: '#4F46E5', fontWeight: 'bold', marginTop: 5}}>Thêm mới</Text>
             </TouchableOpacity>
             
-            {activeCategory && mediaData[activeCategory].map((item) => (
+            {combinedMediaList.map((item) => (
               <TouchableOpacity key={item.id} style={styles.thumbContainer} onPress={() => { setSelectedItem(item); setEditName(item.name); }}>
-                <Image source={{ uri: item.uri }} style={styles.thumbImage} />
+                {/* NẾU LÀ VIDEO THÌ HIỆN ICON THAY VÌ ẢNH ĐỂ KHÔNG BỊ CRASH */}
+                {item.type === 'video' ? (
+                  <View style={[styles.thumbImage, { backgroundColor: '#374151', justifyContent: 'center', alignItems: 'center' }]}>
+                    <Ionicons name="film-outline" size={40} color="#9CA3AF" />
+                  </View>
+                ) : (
+                  <Image source={typeof item.uri === 'number' ? item.uri : { uri: getFullUri(item.uri as string) }} style={styles.thumbImage} />
+                )}
                 {item.type === 'video' && <Ionicons name="play-circle" size={30} color="white" style={styles.videoIcon} />}
+                {item.isDefault && <View style={styles.defaultBadge}><Ionicons name="star" size={12} color="white"/></View>}
                 <View style={styles.thumbLabelBox}><Text style={styles.thumbLabelText} numberOfLines={1}>{item.name}</Text></View>
               </TouchableOpacity>
             ))}
           </ScrollView>
 
-          {/* LỚP PHỦ ẢO ĐỂ HIỂN THỊ CHI TIẾT ĐỔI TÊN MÀ KHÔNG DÙNG THÊM MODAL MỚI */}
           {selectedItem !== null && (
             <View style={[StyleSheet.absoluteFill, styles.detailOverlay]}>
               <View style={styles.detailBox}>
-                <TouchableOpacity onPress={() => setSelectedItem(null)} style={styles.detailCloseBtn}>
-                  <Ionicons name="close-circle" size={35} color="#EF4444" />
-                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setSelectedItem(null)} style={styles.detailCloseBtn}><Ionicons name="close-circle" size={35} color="#EF4444" /></TouchableOpacity>
                 
-                <Image source={{ uri: selectedItem.uri }} style={styles.detailImage} resizeMode="contain" />
+                {/* NẾU LÀ VIDEO THÌ DÙNG BỘ PHÁT VIDEO, CÒN ẢNH THÌ DÙNG IMAGE */}
+                {selectedItem.type === 'video' ? (
+                  <Video
+                    source={typeof selectedItem.uri === 'number' ? selectedItem.uri : { uri: getFullUri(selectedItem.uri as string) }}
+                    style={styles.detailImage}
+                    useNativeControls
+                    resizeMode={ResizeMode.CONTAIN}
+                    shouldPlay
+                    isLooping
+                  />
+                ) : (
+                  <Image source={typeof selectedItem.uri === 'number' ? selectedItem.uri : { uri: getFullUri(selectedItem.uri as string) }} style={styles.detailImage} resizeMode="contain" />
+                )}
+
                 <Text style={styles.inputLabel}>Tên hiển thị (dùng làm đáp án đọc):</Text>
                 
                 <View style={styles.renameRow}>
@@ -304,9 +334,9 @@ export default function SettingsScreen() {
                   <TouchableOpacity style={styles.saveNameBtn} onPress={handleRename}><Text style={styles.saveNameText}>Lưu</Text></TouchableOpacity>
                 </View>
                 
-                <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-                  <Ionicons name="trash" size={20} color="white" />
-                  <Text style={styles.deleteBtnText}>Xóa file này</Text>
+                <TouchableOpacity style={[styles.deleteBtn, selectedItem.isDefault ? {backgroundColor: '#F59E0B'} : null]} onPress={handleDelete}>
+                  <Ionicons name={selectedItem.isDefault ? "eye-off" : "trash"} size={20} color="white" />
+                  <Text style={styles.deleteBtnText}>{selectedItem.isDefault ? "Ẩn khỏi game" : "Xóa file này"}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -351,14 +381,13 @@ const styles = StyleSheet.create({
   thumbContainer: { width: (width - 40) / 3, height: (width - 40) / 3, borderRadius: 15, overflow: 'hidden', backgroundColor: 'black' },
   thumbImage: { width: '100%', height: '100%', opacity: 0.8 },
   videoIcon: { position: 'absolute', top: '50%', left: '50%', transform: [{translateX: -15}, {translateY: -15}] },
+  defaultBadge: { position: 'absolute', top: 5, right: 5, backgroundColor: '#F59E0B', borderRadius: 10, width: 20, height: 20, justifyContent: 'center', alignItems: 'center' },
   thumbLabelBox: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: 'rgba(0,0,0,0.6)', padding: 5 },
   thumbLabelText: { color: 'white', fontSize: 10, textAlign: 'center', fontWeight: 'bold' },
-  
-  // TÈO SỬA LẠI DETAIL OVERLAY ĐỂ NÓ NẰM GỌN TRONG MODAL 1
   detailOverlay: { backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20, zIndex: 1000 },
   detailBox: { width: '100%', backgroundColor: 'white', borderRadius: 20, padding: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 10 },
   detailCloseBtn: { position: 'absolute', top: -15, right: -15, backgroundColor: 'white', borderRadius: 20 },
-  detailImage: { width: 250, height: 250, borderRadius: 10, marginBottom: 20, backgroundColor: '#E5E7EB' },
+  detailImage: { width: 250, height: 250, borderRadius: 10, marginBottom: 20, backgroundColor: '#E5E7EB', overflow: 'hidden' },
   inputLabel: { alignSelf: 'flex-start', fontWeight: 'bold', color: '#4B5563', marginBottom: 5 },
   renameRow: { flexDirection: 'row', width: '100%', marginBottom: 20 },
   nameInput: { flex: 1, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, paddingHorizontal: 15, paddingVertical: 10, backgroundColor: '#F9FAFB' },
