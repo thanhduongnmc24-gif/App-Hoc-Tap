@@ -87,15 +87,17 @@ export default function LearningScreen() {
     } catch (e) {}
   };
 
+  // TÈO ĐÃ XÓA SUPABASE, ĐỌC DATA TRỰC TIẾP TỪ Ổ CỨNG LUÔN
   const fetchSettings = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data } = await supabase.from('be_hoc_toan_data').select('max_limit, loai_phep_tinh').eq('user_id', user.id).single();
-      const fetchedLimit = data?.max_limit || 10;
-      const fetchedType = data?.loai_phep_tinh || 'ca_hai';
-      setMathType(fetchedType);
-      setMaxLimit(fetchedLimit);
-      setProblems(createNewProblems(fetchedLimit, fetchedType));
+    try {
+      const storedData = await AsyncStorage.getItem('@be_hoc_toan_data');
+      if (storedData) {
+        const data = JSON.parse(storedData);
+        setMaxLimit(data.max_limit || 10);
+        setMathType(data.loai_phep_tinh || 'ca_hai');
+      }
+    } catch (error) {
+      console.log('Lỗi đọc cấu hình offline:', error);
     }
   };
 

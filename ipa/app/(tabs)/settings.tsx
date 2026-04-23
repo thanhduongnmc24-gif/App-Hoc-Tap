@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert, ActivityIndicator, Modal, Image, TextInput, Dimensions, Platform } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
-import { supabase } from '../../utils/supabaseConfig';
+// ĐÃ XÓA SUPABASE Ở ĐÂY
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// IMPORT BỘ PHÁT VIDEO ĐỂ XEM THỬ
 import { Video, ResizeMode } from 'expo-av';
 
 import { TAP_DOC_DATA } from '../../constants/kho_tap_doc';
@@ -18,7 +17,6 @@ import { GIOI_VIDEOS, TOT_VIDEOS } from '../../constants/kho_video';
 const { width } = Dimensions.get('window');
 
 type MathType = 'cong' | 'tru' | 'ca_hai';
-// TÈO THÊM DANH MỤC VIDEO VÀO ĐÂY
 type MediaType = 'to_mau' | 'tinh_diem' | 'tap_doc' | 'thu_thach' | 'video_chuc_mung';
 
 interface MediaItem {
@@ -67,22 +65,35 @@ export default function SettingsScreen() {
     loadAllMediaState();
   }, []);
 
+  // TÈO ĐÃ ĐỔI HÀM LẤY DATA SANG ĐỌC TỪ BỘ NHỚ MÁY
   const fetchSettings = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase.from('be_hoc_toan_data').select('max_limit, loai_phep_tinh').eq('user_id', user.id).single();
-        if (data) { setMaxLimit(data.max_limit || 10); setMathType((data.loai_phep_tinh as MathType) || 'ca_hai'); }
+      const storedData = await AsyncStorage.getItem('@be_hoc_toan_data');
+      if (storedData) {
+        const data = JSON.parse(storedData);
+        setMaxLimit(data.max_limit || 10);
+        setMathType((data.loai_phep_tinh as MathType) || 'ca_hai');
       }
-    } catch (error) {} finally { setLoading(false); }
+    } catch (error) {
+      console.log('Lỗi lấy cài đặt:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // TÈO ĐÃ ĐỔI HÀM LƯU DATA VÀO BỘ NHỚ MÁY
   const updateSettings = async (newLimit: number, newType: MathType) => {
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) await supabase.from('be_hoc_toan_data').update({ max_limit: newLimit, loai_phep_tinh: newType }).eq('user_id', user.id);
-    } catch (error) {} finally { setSaving(false); }
+      await AsyncStorage.setItem('@be_hoc_toan_data', JSON.stringify({
+        max_limit: newLimit,
+        loai_phep_tinh: newType
+      }));
+    } catch (error) {
+      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được cài đặt!');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const loadAllMediaState = async () => {
@@ -125,9 +136,7 @@ export default function SettingsScreen() {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) return;
 
-    // Phân loại: Nếu đang ở mục video thì ưu tiên chọn video, còn lại chọn ảnh
     const isVideoCategory = activeCategory === 'video_chuc_mung';
-    
     const result = await ImagePicker.launchImageLibraryAsync({ 
       mediaTypes: isVideoCategory ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images, 
       allowsEditing: false, 
@@ -293,7 +302,6 @@ export default function SettingsScreen() {
             
             {combinedMediaList.map((item) => (
               <TouchableOpacity key={item.id} style={styles.thumbContainer} onPress={() => { setSelectedItem(item); setEditName(item.name); }}>
-                {/* NẾU LÀ VIDEO THÌ HIỆN ICON THAY VÌ ẢNH ĐỂ KHÔNG BỊ CRASH */}
                 {item.type === 'video' ? (
                   <View style={[styles.thumbImage, { backgroundColor: '#374151', justifyContent: 'center', alignItems: 'center' }]}>
                     <Ionicons name="film-outline" size={40} color="#9CA3AF" />
@@ -313,16 +321,8 @@ export default function SettingsScreen() {
               <View style={styles.detailBox}>
                 <TouchableOpacity onPress={() => setSelectedItem(null)} style={styles.detailCloseBtn}><Ionicons name="close-circle" size={35} color="#EF4444" /></TouchableOpacity>
                 
-                {/* NẾU LÀ VIDEO THÌ DÙNG BỘ PHÁT VIDEO, CÒN ẢNH THÌ DÙNG IMAGE */}
                 {selectedItem.type === 'video' ? (
-                  <Video
-                    source={typeof selectedItem.uri === 'number' ? selectedItem.uri : { uri: getFullUri(selectedItem.uri as string) }}
-                    style={styles.detailImage}
-                    useNativeControls
-                    resizeMode={ResizeMode.CONTAIN}
-                    shouldPlay
-                    isLooping
-                  />
+                  <Video source={typeof selectedItem.uri === 'number' ? selectedItem.uri : { uri: getFullUri(selectedItem.uri as string) }} style={styles.detailImage} useNativeControls resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping />
                 ) : (
                   <Image source={typeof selectedItem.uri === 'number' ? selectedItem.uri : { uri: getFullUri(selectedItem.uri as string) }} style={styles.detailImage} resizeMode="contain" />
                 )}

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image, Animated, 
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { supabase } from '../../utils/supabaseConfig';
+
 import { Video, ResizeMode, Audio } from 'expo-av';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import LottieView from 'lottie-react-native';
@@ -659,13 +659,18 @@ export default function TroChoiHubScreen() {
   const [maxLimit, setMaxLimit] = useState(10);
   const [currentGame, setCurrentGame] = useState<'menu' | 'cho_an' | 'bap_benh' | 'dap_thu' | 'thu_thach' | 've_tranh'>('menu');
 
-  useFocusEffect(
+ useFocusEffect(
     useCallback(() => {
+      // TÈO ĐỔI SANG ĐỌC TỪ BỘ NHỚ LOCAL THAY VÌ SUPABASE
       const fetchLimit = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data } = await supabase.from('be_hoc_toan_data').select('max_limit').eq('user_id', user.id).single();
-          if (data?.max_limit) setMaxLimit(data.max_limit);
+        try {
+          const storedData = await AsyncStorage.getItem('@be_hoc_toan_data');
+          if (storedData) {
+            const data = JSON.parse(storedData);
+            setMaxLimit(data.max_limit || 10);
+          }
+        } catch (error) {
+          console.log(error);
         }
       };
       fetchLimit();
