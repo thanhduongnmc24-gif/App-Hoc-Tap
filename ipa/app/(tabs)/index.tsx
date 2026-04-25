@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform, Image, Modal, Dimensions } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
-import { supabase } from '../../utils/supabaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import ConfettiCannon from 'react-native-confetti-cannon';
@@ -45,7 +44,6 @@ export default function LearningScreen() {
   const unseenTot = useRef([...TOT_VIDEOS]);
   const unseenCanCoGan = useRef([...CAN_CO_GAN_VIDEOS]);
 
-  // TÈO THÊM STATE ĐỂ LƯU ẢNH TÍNH ĐIỂM TỰ THÊM NÈ
   const [customTinhDiem, setCustomTinhDiem] = useState<any[]>([]);
 
   useEffect(() => {
@@ -59,7 +57,7 @@ export default function LearningScreen() {
     useCallback(() => {
       fetchSettings();
       fetchChildName(); 
-      loadCustomMedia(); // Lôi ảnh từ Cài Đặt ra
+      loadCustomMedia(); 
     }, [])
   );
 
@@ -69,7 +67,6 @@ export default function LearningScreen() {
       if (storedData) {
         const parsed = JSON.parse(storedData);
         if (parsed.tinh_diem && parsed.tinh_diem.length > 0) {
-          // Bọc lại thành object {uri: ...} cho giống kho mặc định
           setCustomTinhDiem(parsed.tinh_diem.map((item: any) => ({ uri: item.uri })));
         } else {
           setCustomTinhDiem([]);
@@ -87,17 +84,20 @@ export default function LearningScreen() {
     } catch (e) {}
   };
 
-  // TÈO ĐÃ XÓA SUPABASE, ĐỌC DATA TRỰC TIẾP TỪ Ổ CỨNG LUÔN
   const fetchSettings = async () => {
     try {
-      const storedData = await AsyncStorage.getItem('@be_hoc_toan_data');
-      if (storedData) {
-        const data = JSON.parse(storedData);
-        setMaxLimit(data.max_limit || 10);
-        setMathType(data.loai_phep_tinh || 'ca_hai');
+      const storedSettings = await AsyncStorage.getItem('@settings_toan');
+      if (storedSettings) {
+        const { max_limit, loai_phep_tinh } = JSON.parse(storedSettings);
+        setMathType(loai_phep_tinh || 'ca_hai');
+        setMaxLimit(max_limit || 10);
+        setProblems(createNewProblems(max_limit || 10, loai_phep_tinh || 'ca_hai'));
+      } else {
+        setProblems(createNewProblems(10, 'ca_hai'));
       }
-    } catch (error) {
-      console.log('Lỗi đọc cấu hình offline:', error);
+    } catch (e) {
+      console.log('Lỗi lấy cài đặt:', e);
+      setProblems(createNewProblems(10, 'ca_hai'));
     }
   };
 
@@ -207,17 +207,16 @@ export default function LearningScreen() {
     let originalVideoArray: any[] = [];
     let unseenRef: React.MutableRefObject<any[]>;
 
-    // TÈO TRỘN ẢNH TÍNH ĐIỂM Ở ĐÂY NÈ!
     if (currentScore >= 9) {
       selectedImageArray = [...GIOI_IMAGES, ...customTinhDiem];
       originalVideoArray = GIOI_VIDEOS;
       unseenRef = unseenGioi;
     } else if (currentScore >= 6) {
-      selectedImageArray = [...TOT_IMAGES, ...customTinhDiem]; // Tốt cũng được xem ảnh gia đình
+      selectedImageArray = [...TOT_IMAGES, ...customTinhDiem]; 
       originalVideoArray = TOT_VIDEOS;
       unseenRef = unseenTot;
     } else {
-      selectedImageArray = CAN_CO_GAN_IMAGES; // Yếu thì ráng làm lại mới cho coi ảnh đẹp
+      selectedImageArray = CAN_CO_GAN_IMAGES; 
       originalVideoArray = CAN_CO_GAN_VIDEOS;
       unseenRef = unseenCanCoGan;
     }

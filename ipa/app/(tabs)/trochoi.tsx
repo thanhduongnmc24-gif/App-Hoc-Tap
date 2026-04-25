@@ -1,20 +1,20 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image, Animated, PanResponder, ScrollView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image, Animated, PanResponder, ScrollView, Platform, Alert, Modal } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-
 import { Video, ResizeMode, Audio } from 'expo-av';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import LottieView from 'lottie-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Slider from '@react-native-community/slider';
 
-import Svg, { Path as SvgPath } from 'react-native-svg';
-
-// THƯ VIỆN ĐỂ CHỤP VÀ LƯU ẢNH
+// Thư viện mới để lưu ảnh
 import { captureRef } from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
+
+import { Canvas, Path as SkiaPath, Skia, DashPathEffect, BlurMask } from '@shopify/react-native-skia';
+import Svg, { Path as SvgPath } from 'react-native-svg';
 
 import { KHO_DONG_VAT } from '../../constants/kho_dong_vat';
 import { LOTTIE_ANIMALS } from '../../constants/kho_lottie';
@@ -39,11 +39,12 @@ const generateMathProblem = (limit: number) => {
     if (!options.includes(wrongAns)) options.push(wrongAns);
   }
   options.sort(() => Math.random() - 0.5);
+  
   return { num1, num2, correctAns, options };
 };
 
 // ==========================================
-// GAME 1: CHO ĐỘNG VẬT ĂN
+// GAME 1: CHO ĐỘNG VẬT ĂN 🐰🥣
 // ==========================================
 const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => void }) => {
   const unseenAnimalsRef = useRef<any[]>([]);
@@ -62,8 +63,11 @@ const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () =
 
   const handleAnswer = (ans: number) => {
     if (videoState !== 'idle' || !currentAnimal) return;
-    if (ans === problem.correctAns) setVideoState('eating');
-    else setVideoState('crying');
+    if (ans === problem.correctAns) {
+      setVideoState('eating');
+    } else {
+      setVideoState('crying');
+    }
   };
 
   const handleVideoFinish = (status: any) => {
@@ -81,15 +85,21 @@ const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () =
   if (!currentAnimal) {
     return (
       <View style={[styles.gameContainer, { backgroundColor: '#FEF3C7', justifyContent: 'center', alignItems: 'center' }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}><Ionicons name="arrow-back-circle" size={50} color="#D97706" /></TouchableOpacity>
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#B45309', textAlign: 'center', padding: 20 }}>Rạp xiếc chưa có thú! Đại ca nạp thú vào kho nha!</Text>
+        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+          <Ionicons name="arrow-back-circle" size={50} color="#D97706" />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#B45309', textAlign: 'center', padding: 20 }}>
+          Rạp xiếc chưa có thú! Đại ca nạp thú vào kho nha!
+        </Text>
       </View>
     );
   }
 
   return (
     <View style={[styles.gameContainer, { backgroundColor: '#FEF3C7' }]}>
-      <TouchableOpacity style={styles.backBtn} onPress={onBack}><Ionicons name="arrow-back-circle" size={50} color="#D97706" /></TouchableOpacity>
+      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+        <Ionicons name="arrow-back-circle" size={50} color="#D97706" />
+      </TouchableOpacity>
       <View style={styles.animalScreen}>
         {videoState === 'idle' ? (
           <Image source={currentAnimal.image} style={styles.animalMedia} resizeMode="cover" />
@@ -97,11 +107,14 @@ const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () =
           <Video source={videoState === 'eating' ? currentAnimal.videoAn : currentAnimal.videoKhoc} style={styles.animalMedia} resizeMode={ResizeMode.COVER} shouldPlay onPlaybackStatusUpdate={handleVideoFinish} />
         )}
       </View>
-      <View style={styles.problemBoard}><Text style={styles.problemText}>{problem.num1} + {problem.num2} = ?</Text></View>
+      <View style={styles.problemBoard}>
+        <Text style={styles.problemText}>{problem.num1} + {problem.num2} = ?</Text>
+      </View>
       <View style={styles.answerArea}>
         {problem.options.map((ans, index) => (
           <TouchableOpacity key={index} style={styles.foodItem} activeOpacity={0.7} onPress={() => handleAnswer(ans)}>
-            <Text style={styles.foodEmoji}>🥣</Text><Text style={styles.foodText}>{ans}</Text>
+            <Text style={styles.foodEmoji}>🥣</Text>
+            <Text style={styles.foodText}>{ans}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -110,29 +123,44 @@ const ChoDongVatAnGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () =
 };
 
 // ==========================================
-// GAME 2: BẬP BÊNH TOÁN HỌC
+// GAME 2: BẬP BÊNH TOÁN HỌC ⚖️
 // ==========================================
 const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: (i: any) => void, isAnimal?: boolean }) => {
   const pan = useRef(new Animated.ValueXY()).current;
   const scale = useRef(new Animated.Value(1)).current;
 
   const playPickSound = async () => {
-    try { const { sound } = await Audio.Sound.createAsync({ uri: 'https://actions.google.com/sounds/v1/cartoon/pop.ogg' }); await sound.playAsync(); sound.setOnPlaybackStatusUpdate((s:any) => { if (s.isLoaded && s.didJustFinish) sound.unloadAsync(); }); } catch (error) {}
+    try {
+      const { sound } = await Audio.Sound.createAsync({ uri: 'https://actions.google.com/sounds/v1/cartoon/pop.ogg' });
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status: any) => { if (status.isLoaded && status.didJustFinish) sound.unloadAsync(); });
+    } catch (error) {}
   };
 
   const playDropSound = async () => {
-    try { const { sound } = await Audio.Sound.createAsync({ uri: 'https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg' }); await sound.playAsync(); sound.setOnPlaybackStatusUpdate((s:any) => { if (s.isLoaded && s.didJustFinish) sound.unloadAsync(); }); } catch (error) {}
+    try {
+      const { sound } = await Audio.Sound.createAsync({ uri: 'https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg' });
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status: any) => { if (status.isLoaded && status.didJustFinish) sound.unloadAsync(); });
+    } catch (error) {}
   };
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => { playPickSound(); Animated.spring(scale, { toValue: 1.2, useNativeDriver: false }).start(); },
+      onPanResponderGrant: () => {
+        playPickSound();
+        Animated.spring(scale, { toValue: 1.2, useNativeDriver: false }).start();
+      },
       onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
       onPanResponderRelease: (e, gesture) => {
         Animated.spring(scale, { toValue: 1, useNativeDriver: false }).start();
-        if (gesture.dy < -60) { playDropSound(); onDrop(item); } 
-        else Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
+        if (gesture.dy < -60) {
+          playDropSound();
+          onDrop(item);
+        } else {
+          Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
+        }
       }
     })
   ).current;
@@ -153,20 +181,29 @@ const DraggableItem = ({ item, onDrop, isAnimal = false }: { item: any, onDrop: 
   );
 };
 
-const BLOCK_COLORS = [ { bg: '#FCA5A5', border: '#B91C1C' }, { bg: '#93C5FD', border: '#1D4ED8' }, { bg: '#86EFAC', border: '#15803D' }, { bg: '#FDE047', border: '#A16207' }, { bg: '#D8B4FE', border: '#7E22CE' } ];
+const BLOCK_COLORS = [
+  { bg: '#FCA5A5', border: '#B91C1C' }, { bg: '#93C5FD', border: '#1D4ED8' }, 
+  { bg: '#86EFAC', border: '#15803D' }, { bg: '#FDE047', border: '#A16207' }, 
+  { bg: '#D8B4FE', border: '#7E22CE' }, 
+];
 
 const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => void }) => {
   const initGame = () => {
     const targetLimit = maxLimit > 20 ? 20 : Math.max(maxLimit, 5);
     const target = Math.floor(Math.random() * (targetLimit - 4)) + 5; 
     const sessionKey = Date.now(); 
+
     const selectedLottie = LOTTIE_ANIMALS && LOTTIE_ANIMALS.length > 0 ? LOTTIE_ANIMALS[Math.floor(Math.random() * LOTTIE_ANIMALS.length)] : null;
     const animal = { id: `a1_${sessionKey}`, lottieAnim: selectedLottie, val: target };
+    
     let blocks = [];
     for(let i = 1; i <= 9; i++) {
       let val = i >= target ? Math.floor(Math.random() * (target - 1)) + 1 : i;
       const color = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
-      blocks.push({ id: `b${i}_${sessionKey}`, val: val, color, rot: `${Math.floor(Math.random() * 40 - 20)}deg`, marginLeft: Math.floor(Math.random() * 5), marginTop: Math.floor(Math.random() * 5) });
+      blocks.push({
+        id: `b${i}_${sessionKey}`, val: val, color, rot: `${Math.floor(Math.random() * 40 - 20)}deg`, 
+        marginLeft: Math.floor(Math.random() * 5), marginTop: Math.floor(Math.random() * 5),  
+      });
     }
     blocks.sort(() => Math.random() - 0.5); 
     return { animal, blocks, target };
@@ -176,6 +213,7 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
   const [animalPlaced, setAnimalPlaced] = useState(false);
   const [placedBlocks, setPlacedBlocks] = useState<any[]>([]);
   const [isVictory, setIsVictory] = useState(false);
+
   const leftWeight = animalPlaced ? gameState.target : 0;
   const rightWeight = placedBlocks.reduce((sum, b) => sum + b.val, 0);
   const tiltAnim = useRef(new Animated.Value(0)).current;
@@ -188,15 +226,26 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
 
     if (leftWeight === rightWeight && leftWeight > 0 && !isVictory) {
       setIsVictory(true);
-      Animated.sequence([ Animated.timing(winScaleAnim, { toValue: 1.1, duration: 200, useNativeDriver: true }), Animated.spring(winScaleAnim, { toValue: 1, friction: 2, useNativeDriver: true }) ]).start();
-      timeout = setTimeout(() => { setAnimalPlaced(false); setPlacedBlocks([]); setIsVictory(false); setGameState(initGame()); }, 3000);
+      Animated.sequence([
+        Animated.timing(winScaleAnim, { toValue: 1.1, duration: 200, useNativeDriver: true }),
+        Animated.spring(winScaleAnim, { toValue: 1, friction: 2, useNativeDriver: true })
+      ]).start();
+      timeout = setTimeout(() => {
+        setAnimalPlaced(false); setPlacedBlocks([]); setIsVictory(false); setGameState(initGame());
+      }, 3000);
     }
     return () => { if (timeout) clearTimeout(timeout); };
   }, [leftWeight, rightWeight]);
 
   const handleDropAnimal = () => setAnimalPlaced(true);
-  const handleDropBlock = (block: any) => { setGameState(prev => ({ ...prev, blocks: prev.blocks.filter(b => b.id !== block.id) })); setPlacedBlocks(prev => [...prev, block]); };
-  const handleRemoveBlock = (block: any) => { setPlacedBlocks(prev => prev.filter(b => b.id !== block.id)); setGameState(prev => ({ ...prev, blocks: [...prev.blocks, block] })); };
+  const handleDropBlock = (block: any) => {
+    setGameState(prev => ({ ...prev, blocks: prev.blocks.filter(b => b.id !== block.id) }));
+    setPlacedBlocks(prev => [...prev, block]);
+  };
+  const handleRemoveBlock = (block: any) => {
+    setPlacedBlocks(prev => prev.filter(b => b.id !== block.id));
+    setGameState(prev => ({ ...prev, blocks: [...prev.blocks, block] }));
+  };
 
   const rotateInterpolate = tiltAnim.interpolate({ inputRange: [-20, 20], outputRange: ['-20deg', '20deg'] });
 
@@ -214,7 +263,10 @@ const BapBenhGame = ({ maxLimit, onBack }: { maxLimit: number, onBack: () => voi
           <View style={styles.panContainerLeft}>
             <View style={styles.pan}>
               {animalPlaced && (
-                <View style={styles.animalOnPan}><LottieView source={gameState.animal.lottieAnim} autoPlay loop style={styles.lottieAnimal} /><View style={styles.animalBadge}><Text style={styles.animalBadgeText}>{gameState.animal.val}</Text></View></View>
+                <View style={styles.animalOnPan}>
+                  <LottieView source={gameState.animal.lottieAnim} autoPlay loop style={styles.lottieAnimal} />
+                  <View style={styles.animalBadge}><Text style={styles.animalBadgeText}>{gameState.animal.val}</Text></View>
+                </View>
               )}
             </View>
             <View style={styles.panRopeLeft} /><View style={styles.panRopeRight} />
@@ -307,16 +359,15 @@ const DapThuGame = ({ onBack }: { onBack: () => void }) => {
     return () => { if (gameLoopRef.current) clearTimeout(gameLoopRef.current); };
   }, [startGame]);
 
-  const playBonkSound = async () => {
-    try { const { sound } = await Audio.Sound.createAsync({ uri: 'https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg' }); await sound.playAsync(); sound.setOnPlaybackStatusUpdate((s:any) => { if (s.isLoaded && s.didJustFinish) sound.unloadAsync(); }); } catch (error) {}
-  };
-
   const handleWhack = (index: number, event: any) => {
     if (gameOverRef.current) return;
     const { pageX, pageY } = event.nativeEvent;
     setHammerPos({ x: pageX, y: pageY });
     hammerAnim.setValue(0);
-    Animated.sequence([ Animated.timing(hammerAnim, { toValue: 1, duration: 80, useNativeDriver: true }), Animated.timing(hammerAnim, { toValue: 0, duration: 150, delay: 50, useNativeDriver: true }) ]).start(() => setHammerPos(null));
+    Animated.sequence([
+      Animated.timing(hammerAnim, { toValue: 1, duration: 80, useNativeDriver: true }), 
+      Animated.timing(hammerAnim, { toValue: 0, duration: 150, delay: 50, useNativeDriver: true })
+    ]).start(() => setHammerPos(null));
 
     if (index === activeHoleRef.current) {
       if (gameLoopRef.current) clearTimeout(gameLoopRef.current);
@@ -386,7 +437,11 @@ const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
         const stored = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (parsed.thu_thach) custom = parsed.thu_thach.map((item:any, index:number) => ({ id: 'custom_'+index, image: {uri: item.uri} }));
+          if (parsed.thu_thach) {
+             custom = parsed.thu_thach.map((item:any, index:number) => ({ 
+               id: 'custom_'+index, image: {uri: item.uri} 
+             }));
+          }
         }
       } catch (e) {}
       const base = THU_THACH_IMAGES.map((img, index) => ({ id: 'base_'+index, image: img }));
@@ -410,7 +465,9 @@ const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
         timeoutRef.current = setTimeout(spin, speed);
       } else {
         let finalIdx = Math.floor(Math.random() * allThuThach.length);
-        while (allThuThach.length > 1 && allThuThach[finalIdx].id === lastImgId) finalIdx = Math.floor(Math.random() * allThuThach.length);
+        while (allThuThach.length > 1 && allThuThach[finalIdx].id === lastImgId) {
+           finalIdx = Math.floor(Math.random() * allThuThach.length);
+        }
         const finalImage = allThuThach[finalIdx];
         setCurrentImg(finalImage); setLastImgId(finalImage.id); setIsSpinning(false);
         Animated.sequence([ Animated.timing(bounceAnim, { toValue: 1.1, duration: 150, useNativeDriver: true }), Animated.spring(bounceAnim, { toValue: 1, friction: 3, useNativeDriver: true }) ]).start();
@@ -434,7 +491,8 @@ const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
           </Animated.View>
         ) : (
           <View style={[styles.challengeCard, styles.cardPlaceholder]}>
-             <Text style={{ fontSize: 100 }}>❓</Text><Text style={{ fontSize: 20, color: '#EA580C', fontWeight: 'bold', marginTop: 10 }}>Bé sẵn sàng chưa?</Text>
+             <Text style={{ fontSize: 100 }}>❓</Text>
+             <Text style={{ fontSize: 20, color: '#EA580C', fontWeight: 'bold', marginTop: 10 }}>Bé sẵn sàng chưa?</Text>
           </View>
         )}
       </View>
@@ -452,46 +510,151 @@ const ThuThachGame = ({ onBack }: { onBack: () => void }) => {
 };
 
 // =========================================================
-// GAME 5: BÉ TẬP VẼ - BẢN ĐÃ CẬP NHẬT TẨY VÀ NÚT LƯU ẢNH
+// GAME 5A: BÉ TẬP VẼ - PHIÊN BẢN CHẠY TRÊN WEB
 // =========================================================
-const VeTranhGameContent = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allToMau }: any) => {
+const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allToMau }: any) => {
   const [paths, setPaths] = useState<any[]>([]);
   const [currentPath, setCurrentPath] = useState<any>(null);
   const [currentColor, setCurrentColor] = useState('#EF4444');
   const [strokeWidth, setStrokeWidth] = useState(8);
-  
-  // TÈO THÊM LOẠI BÚT 'tay' VÀO ĐÂY NHA ĐẠI CA
   const [penType, setPenType] = useState<'thuong' | 'kim_tuyen' | 'tay'>('thuong');
   
-  // REF CHO KHUNG VẼ ĐỂ CHỤP ẢNH LẠI
-  const canvasRef = useRef<View>(null);
+  const viewRef = useRef<View>(null);
 
   const undoLastPath = () => setPaths((prev) => prev.slice(0, -1));
   const clearAllPaths = () => setPaths([]);
 
-  // HÀM LƯU ẢNH
-  const saveDrawing = async () => {
+  const handleSave = async () => {
+    window.alert('Bản Web chưa hỗ trợ chụp ảnh lưu máy đâu anh hai! Anh hai build lên điện thoại rồi chụp nha!');
+  };
+
+  if (mode === 'select_bg') {
+    return (
+      <View style={[styles.gameContainer, { backgroundColor: '#EFF6FF' }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => setMode('menu')}><Ionicons name="arrow-back-circle" size={50} color="#3B82F6" /></TouchableOpacity>
+        <Text style={[styles.drawMenuTitle, { marginTop: 80, color: '#1D4ED8' }]}>Chọn hình để tô màu nha</Text>
+        {allToMau.length === 0 ? (
+          <Text style={{ textAlign: 'center', marginTop: 50, fontSize: 18, color: 'gray' }}>Anh hai chưa thêm ảnh Tô Màu nào trong Cài Đặt kìa!</Text>
+        ) : (
+          <ScrollView contentContainerStyle={styles.bgSelectorGrid}>
+            {allToMau.map((img: any, idx: number) => (
+              <TouchableOpacity key={idx} style={styles.bgThumbnail} onPress={() => { setSelectedBg(img); setMode('drawing'); }}>
+                <Image source={img} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.gameContainer, { backgroundColor: '#E5E7EB' }]}>
+      <View style={styles.drawHeader}>
+        <TouchableOpacity onPress={() => { setMode('menu'); clearAllPaths(); }}><Ionicons name="arrow-back-circle" size={45} color="#4B5563" /></TouchableOpacity>
+        <Text style={{fontWeight: 'bold', color: 'gray'}}>(Bản Web)</Text>
+        <View style={{ flexDirection: 'row', gap: 15 }}>
+          <TouchableOpacity style={[styles.drawActionBtn, { backgroundColor: '#10B981' }]} onPress={handleSave}>
+            <Ionicons name="save" size={24} color="white" />
+            <Text style={styles.drawActionText}>Lưu ảnh</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.drawActionBtn} onPress={undoLastPath}><Ionicons name="arrow-undo" size={24} color="white" /><Text style={styles.drawActionText}>Hoàn tác</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.drawActionBtn, { backgroundColor: '#EF4444' }]} onPress={clearAllPaths}><Ionicons name="trash" size={24} color="white" /><Text style={styles.drawActionText}>Xóa hết</Text></TouchableOpacity>
+        </View>
+      </View>
+
+      <View ref={viewRef} collapsable={false} style={styles.canvasArea}>
+        {selectedBg && <Image source={selectedBg} style={StyleSheet.absoluteFillObject} resizeMode="contain" />}
+        <View style={StyleSheet.absoluteFillObject} onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true}
+          onResponderGrant={(e) => {
+            const { locationX, locationY } = e.nativeEvent;
+            setCurrentPath({ d: `M ${locationX} ${locationY}`, color: currentColor, strokeWidth, type: penType });
+          }}
+          onResponderMove={(e) => {
+            if(!currentPath) return;
+            const { locationX, locationY } = e.nativeEvent;
+            setCurrentPath((prev: any) => ({ ...prev, d: `${prev.d} L ${locationX} ${locationY}` }));
+          }}
+          onResponderRelease={() => {
+            if (currentPath) { setPaths((prev) => [...prev, currentPath]); setCurrentPath(null); }
+          }}
+        >
+          <Svg style={{ flex: 1 }}>
+            {paths.map((p, index) => (
+              <SvgPath key={index} d={p.d} stroke={p.type === 'tay' ? '#FFFFFF' : p.color} strokeWidth={p.strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none"
+                strokeDasharray={p.type === 'kim_tuyen' ? `${p.strokeWidth}, ${p.strokeWidth * 1.5}` : undefined}
+              />
+            ))}
+            {currentPath && (
+              <SvgPath d={currentPath.d} stroke={currentPath.type === 'tay' ? '#FFFFFF' : currentPath.color} strokeWidth={currentPath.strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none"
+                strokeDasharray={currentPath.type === 'kim_tuyen' ? `${currentPath.strokeWidth}, ${currentPath.strokeWidth * 1.5}` : undefined}
+              />
+            )}
+          </Svg>
+        </View>
+      </View>
+
+      <View style={styles.drawToolbar}>
+        <View style={styles.drawToolsRow}>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity style={[styles.penTypeBtn, penType === 'thuong' && styles.penTypeActive]} onPress={() => setPenType('thuong')}><Text style={{ fontSize: 16 }}>✏️ Thường</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.penTypeBtn, penType === 'kim_tuyen' && styles.penTypeActive]} onPress={() => setPenType('kim_tuyen')}><Text style={{ fontSize: 16 }}>✨ Kim Tuyến</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.penTypeBtn, penType === 'tay' && styles.penTypeActive]} onPress={() => setPenType('tay')}><Text style={{ fontSize: 16 }}>🧽 Cục tẩy</Text></TouchableOpacity>
+          </View>
+          <View style={styles.sliderContainer}>
+            <Text style={{ fontWeight: 'bold', color: '#4B5563' }}>Nét to nhỏ:</Text>
+            <Slider style={{ width: 150, height: 40 }} minimumValue={2} maximumValue={50} value={strokeWidth} onValueChange={setStrokeWidth} minimumTrackTintColor="#3B82F6" thumbTintColor="#2563EB" />
+          </View>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorPalette}>
+          {BUBBLE_COLORS.map((c) => (
+            <TouchableOpacity 
+              key={c} 
+              style={[
+                styles.colorBubble, 
+                { backgroundColor: c }, 
+                c === '#FFFFFF' ? { borderWidth: 3, borderColor: '#D1D5DB' } : {},
+                currentColor === c && penType !== 'tay' && styles.colorBubbleActive 
+              ]} 
+              onPress={() => { setCurrentColor(c); setPenType('thuong'); }} 
+            />
+          ))}
+        </ScrollView>
+      </View>
+    </View>
+  );
+};
+
+// =========================================================
+// GAME 5B: BÉ TẬP VẼ - PHIÊN BẢN CHẠY TRÊN ĐIỆN THOẠI (DÙNG SKIA)
+// =========================================================
+const VeTranhGameNative = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allToMau }: any) => {
+  const [paths, setPaths] = useState<any[]>([]);
+  const [currentPath, setCurrentPath] = useState<any>(null);
+  const [currentColor, setCurrentColor] = useState('#EF4444');
+  const [strokeWidth, setStrokeWidth] = useState(8);
+  const [penType, setPenType] = useState<'thuong' | 'kim_tuyen' | 'tay'>('thuong');
+
+  const viewRef = useRef<View>(null);
+
+  const undoLastPath = () => setPaths((prev) => prev.slice(0, -1));
+  const clearAllPaths = () => setPaths([]);
+
+  const handleSave = async () => {
     try {
-      if (Platform.OS === 'web') {
-        window.alert("Tính năng lưu ảnh tạm thời chỉ hỗ trợ trên Điện thoại/Máy tính bảng nha đại ca!");
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Cấp quyền', 'Anh hai cho phép Tèo lưu ảnh vào máy nha!');
         return;
       }
-      
-      const permission = await MediaLibrary.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
-         Alert.alert("Cấp quyền", "Cho Tèo xin quyền lưu ảnh vào máy nha!");
-         return;
-      }
-      
-      const localUri = await captureRef(canvasRef, {
+      const uri = await captureRef(viewRef, {
         format: 'png',
         quality: 1,
       });
-      
-      await MediaLibrary.saveToLibraryAsync(localUri);
-      Alert.alert("Thành công", "Đã lưu tác phẩm nghệ thuật của bé vào thư viện ảnh! 🎉");
+      await MediaLibrary.saveToLibraryAsync(uri);
+      Alert.alert('Thành công', 'Đã lưu kiệt tác của bé vào kho ảnh máy rồi nha! 🎉');
     } catch (e) {
-      Alert.alert("Lỗi", "Không lưu được ảnh rồi đại ca ơi!");
+      Alert.alert('Lỗi', 'Lưu không được rồi, anh hai cài view-shot chưa?');
     }
   };
 
@@ -519,66 +682,70 @@ const VeTranhGameContent = ({ mode, setMode, selectedBg, setSelectedBg, onBack, 
     <View style={[styles.gameContainer, { backgroundColor: '#E5E7EB' }]}>
       <View style={styles.drawHeader}>
         <TouchableOpacity onPress={() => { setMode('menu'); clearAllPaths(); }}><Ionicons name="arrow-back-circle" size={45} color="#4B5563" /></TouchableOpacity>
-        <Text style={{fontWeight: 'bold', color: 'gray'}}>Bé Sáng Tạo (Neon Glow ✨)</Text>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
+        <Text style={{fontWeight: 'bold', color: 'gray'}}>(Bản Mobile - Skia)</Text>
+        <View style={{ flexDirection: 'row', gap: 15 }}>
+          <TouchableOpacity style={[styles.drawActionBtn, { backgroundColor: '#10B981' }]} onPress={handleSave}>
+            <Ionicons name="save" size={24} color="white" />
+            <Text style={styles.drawActionText}>Lưu ảnh</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.drawActionBtn} onPress={undoLastPath}><Ionicons name="arrow-undo" size={24} color="white" /><Text style={styles.drawActionText}>Hoàn tác</Text></TouchableOpacity>
           <TouchableOpacity style={[styles.drawActionBtn, { backgroundColor: '#EF4444' }]} onPress={clearAllPaths}><Ionicons name="trash" size={24} color="white" /><Text style={styles.drawActionText}>Xóa hết</Text></TouchableOpacity>
-          {/* NÚT LƯU ẢNH XANH LÁ CÂY */}
-          <TouchableOpacity style={[styles.drawActionBtn, { backgroundColor: '#10B981' }]} onPress={saveDrawing}><Ionicons name="save" size={24} color="white" /><Text style={styles.drawActionText}>Lưu</Text></TouchableOpacity>
         </View>
       </View>
 
-      {/* THÊM collapsable={false} ĐỂ CHỤP ẢNH KHÔNG BỊ LỖI TRÊN ANDROID */}
-      <View style={styles.canvasArea} ref={canvasRef} collapsable={false}>
+      <View ref={viewRef} collapsable={false} style={styles.canvasArea}>
         {selectedBg && <Image source={selectedBg} style={StyleSheet.absoluteFillObject} resizeMode="contain" />}
         <View style={StyleSheet.absoluteFillObject} 
-          onStartShouldSetResponder={() => true} 
+          onStartShouldSetResponder={() => true}
           onMoveShouldSetResponder={() => true}
           onResponderGrant={(e) => {
             const { locationX, locationY } = e.nativeEvent;
-            setCurrentPath({ d: `M ${locationX} ${locationY}`, color: currentColor, strokeWidth, type: penType });
+            const newPath = Skia.Path.Make();
+            newPath.moveTo(locationX, locationY);
+            setCurrentPath({ path: newPath, color: currentColor, strokeWidth, type: penType });
           }}
           onResponderMove={(e) => {
-            if(!currentPath) return;
+            if (!currentPath) return;
             const { locationX, locationY } = e.nativeEvent;
-            setCurrentPath((prev: any) => ({ ...prev, d: `${prev.d} L ${locationX} ${locationY}` }));
+            const updatedPath = currentPath.path.copy(); 
+            updatedPath.lineTo(locationX, locationY);
+            setCurrentPath({ ...currentPath, path: updatedPath });
           }}
           onResponderRelease={() => {
-            if (currentPath) { setPaths((prev) => [...prev, currentPath]); setCurrentPath(null); }
+            if (currentPath) { setPaths([...paths, currentPath]); setCurrentPath(null); }
           }}
         >
-          <Svg style={{ flex: 1 }}>
+          <Canvas style={{ flex: 1, pointerEvents: 'none' }}>
             {paths.map((p, index) => (
-              <React.Fragment key={index}>
-                {p.type === 'tay' ? (
-                  /* NẾU LÀ CỤC TẨY THÌ VẼ NÉT TRẮNG, TO GẤP ĐÔI BÌNH THƯỜNG */
-                  <SvgPath d={p.d} stroke="#FFFFFF" strokeWidth={p.strokeWidth * 2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                ) : p.type === 'kim_tuyen' ? (
-                  <React.Fragment>
-                    <SvgPath d={p.d} stroke={p.color} strokeWidth={p.strokeWidth * 2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.3} />
-                    <SvgPath d={p.d} stroke="#FFFFFF" strokeWidth={p.strokeWidth * 0.4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  </React.Fragment>
-                ) : (
-                  <SvgPath d={p.d} stroke={p.color} strokeWidth={p.strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                )}
-              </React.Fragment>
+              <SkiaPath 
+                key={index} 
+                path={p.path} 
+                color={p.type === 'tay' ? '#00000000' : p.color} 
+                blendMode={p.type === 'tay' ? 'clear' : 'srcOver'}
+                style="stroke" 
+                strokeWidth={p.strokeWidth} 
+                strokeCap="round" 
+                strokeJoin="round"
+              >
+                {p.type === 'kim_tuyen' && <DashPathEffect intervals={[p.strokeWidth, p.strokeWidth * 1.5]} />}
+                {p.type === 'kim_tuyen' && <BlurMask blur={3} style="solid" />}
+              </SkiaPath>
             ))}
-            
             {currentPath && (
-              <React.Fragment>
-                {currentPath.type === 'tay' ? (
-                  <SvgPath d={currentPath.d} stroke="#FFFFFF" strokeWidth={currentPath.strokeWidth * 2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                ) : currentPath.type === 'kim_tuyen' ? (
-                  <React.Fragment>
-                    <SvgPath d={currentPath.d} stroke={currentPath.color} strokeWidth={currentPath.strokeWidth * 2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.3} />
-                    <SvgPath d={currentPath.d} stroke="#FFFFFF" strokeWidth={currentPath.strokeWidth * 0.4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  </React.Fragment>
-                ) : (
-                  <SvgPath d={currentPath.d} stroke={currentPath.color} strokeWidth={currentPath.strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                )}
-              </React.Fragment>
+              <SkiaPath 
+                path={currentPath.path} 
+                color={currentPath.type === 'tay' ? '#00000000' : currentPath.color} 
+                blendMode={currentPath.type === 'tay' ? 'clear' : 'srcOver'}
+                style="stroke" 
+                strokeWidth={currentPath.strokeWidth} 
+                strokeCap="round" 
+                strokeJoin="round"
+              >
+                 {currentPath.type === 'kim_tuyen' && <DashPathEffect intervals={[currentPath.strokeWidth, currentPath.strokeWidth * 1.5]} />}
+                 {currentPath.type === 'kim_tuyen' && <BlurMask blur={3} style="solid" />}
+              </SkiaPath>
             )}
-          </Svg>
+          </Canvas>
         </View>
       </View>
 
@@ -587,12 +754,11 @@ const VeTranhGameContent = ({ mode, setMode, selectedBg, setSelectedBg, onBack, 
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <TouchableOpacity style={[styles.penTypeBtn, penType === 'thuong' && styles.penTypeActive]} onPress={() => setPenType('thuong')}><Text style={{ fontSize: 16 }}>✏️ Thường</Text></TouchableOpacity>
             <TouchableOpacity style={[styles.penTypeBtn, penType === 'kim_tuyen' && styles.penTypeActive]} onPress={() => setPenType('kim_tuyen')}><Text style={{ fontSize: 16 }}>✨ Kim Tuyến</Text></TouchableOpacity>
-            {/* TÈO GẮN NÚT CỤC TẨY VÀO ĐÂY NHA */}
-            <TouchableOpacity style={[styles.penTypeBtn, penType === 'tay' && styles.penTypeActive]} onPress={() => setPenType('tay')}><Text style={{ fontSize: 16 }}>🧽 Cục Tẩy</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.penTypeBtn, penType === 'tay' && styles.penTypeActive]} onPress={() => setPenType('tay')}><Text style={{ fontSize: 16 }}>🧽 Cục tẩy</Text></TouchableOpacity>
           </View>
           <View style={styles.sliderContainer}>
             <Text style={{ fontWeight: 'bold', color: '#4B5563' }}>Nét to nhỏ:</Text>
-            <Slider style={{ width: 120, height: 40 }} minimumValue={2} maximumValue={30} value={strokeWidth} onValueChange={setStrokeWidth} minimumTrackTintColor="#3B82F6" thumbTintColor="#2563EB" />
+            <Slider style={{ width: 150, height: 40 }} minimumValue={2} maximumValue={50} value={strokeWidth} onValueChange={setStrokeWidth} minimumTrackTintColor="#3B82F6" thumbTintColor="#2563EB" />
           </View>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorPalette}>
@@ -602,15 +768,10 @@ const VeTranhGameContent = ({ mode, setMode, selectedBg, setSelectedBg, onBack, 
               style={[
                 styles.colorBubble, 
                 { backgroundColor: c }, 
-                // TÈO SỬA VIỀN CHO MÀU TRẮNG Ở ĐÂY NÈ
-                c === '#FFFFFF' && { borderColor: '#D1D5DB' },
-                currentColor === c && styles.colorBubbleActive 
+                c === '#FFFFFF' ? { borderWidth: 3, borderColor: '#D1D5DB' } : {},
+                currentColor === c && penType !== 'tay' && styles.colorBubbleActive 
               ]} 
-              onPress={() => {
-                setCurrentColor(c);
-                // Nếu đang dùng tẩy mà bấm chọn màu thì tự động quay về bút thường
-                if (penType === 'tay') setPenType('thuong');
-              }} 
+              onPress={() => { setCurrentColor(c); setPenType('thuong'); }} 
             />
           ))}
         </ScrollView>
@@ -619,6 +780,9 @@ const VeTranhGameContent = ({ mode, setMode, selectedBg, setSelectedBg, onBack, 
   );
 };
 
+// =========================================================
+// KHUNG ĐIỀU HƯỚNG CHUNG CHO GAME VẼ TRANH
+// =========================================================
 const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
   const [allToMau, setAllToMau] = useState<any[]>([]);
   const [mode, setMode] = useState<'menu' | 'select_bg' | 'drawing'>('menu');
@@ -650,8 +814,11 @@ const VeTranhGame = ({ onBack }: { onBack: () => void }) => {
     );
   }
 
-  // BÂY GIỜ CHỈ CẦN 1 COMPONENT DUY NHẤT LÀ ĐỦ CÂN HẾT WEB LẪN APP RỒI NHA ĐẠI CA
-  return <VeTranhGameContent mode={mode} setMode={setMode} selectedBg={selectedBg} setSelectedBg={setSelectedBg} onBack={onBack} allToMau={allToMau} />;
+  if (Platform.OS === 'web') {
+    return <VeTranhGameWeb mode={mode} setMode={setMode} selectedBg={selectedBg} setSelectedBg={setSelectedBg} onBack={onBack} allToMau={allToMau} />;
+  } else {
+    return <VeTranhGameNative mode={mode} setMode={setMode} selectedBg={selectedBg} setSelectedBg={setSelectedBg} onBack={onBack} allToMau={allToMau} />;
+  }
 };
 
 export default function TroChoiHubScreen() {
@@ -659,18 +826,17 @@ export default function TroChoiHubScreen() {
   const [maxLimit, setMaxLimit] = useState(10);
   const [currentGame, setCurrentGame] = useState<'menu' | 'cho_an' | 'bap_benh' | 'dap_thu' | 'thu_thach' | 've_tranh'>('menu');
 
- useFocusEffect(
+  useFocusEffect(
     useCallback(() => {
-      // TÈO ĐỔI SANG ĐỌC TỪ BỘ NHỚ LOCAL THAY VÌ SUPABASE
       const fetchLimit = async () => {
         try {
-          const storedData = await AsyncStorage.getItem('@be_hoc_toan_data');
-          if (storedData) {
-            const data = JSON.parse(storedData);
-            setMaxLimit(data.max_limit || 10);
+          const storedSettings = await AsyncStorage.getItem('@settings_toan');
+          if (storedSettings) {
+            const { max_limit } = JSON.parse(storedSettings);
+            if (max_limit) setMaxLimit(max_limit);
           }
-        } catch (error) {
-          console.log(error);
+        } catch (e) {
+          console.log('Lỗi lấy max_limit:', e);
         }
       };
       fetchLimit();
@@ -788,7 +954,7 @@ const styles = StyleSheet.create({
   canvasArea: { flex: 1, backgroundColor: 'white' },
   drawToolbar: { backgroundColor: 'white', paddingBottom: 25, paddingTop: 15, borderTopWidth: 2, borderColor: '#E5E7EB', elevation: 15 },
   drawToolsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15 },
-  penTypeBtn: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 15, borderWidth: 2, borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' },
+  penTypeBtn: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 15, borderWidth: 2, borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' },
   penTypeActive: { borderColor: '#3B82F6', backgroundColor: '#EFF6FF' },
   sliderContainer: { flexDirection: 'row', alignItems: 'center' },
   colorPalette: { paddingHorizontal: 15, gap: 12, alignItems: 'center' },
