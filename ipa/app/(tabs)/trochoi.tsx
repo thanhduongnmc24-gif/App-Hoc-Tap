@@ -568,7 +568,9 @@ const VeTranhGameWeb = ({ mode, setMode, selectedBg, setSelectedBg, onBack, allT
         <View style={StyleSheet.absoluteFillObject} onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true}
           onResponderGrant={(e) => {
             const { locationX, locationY } = e.nativeEvent;
-            setCurrentPath({ d: `M ${locationX} ${locationY}`, color: currentColor, strokeWidth, type: penType });
+            // Cục tẩy thì cộng thêm 15 độ dày cho dễ xóa
+            const actualStrokeWidth = penType === 'tay' ? strokeWidth + 15 : strokeWidth;
+            setCurrentPath({ d: `M ${locationX} ${locationY}`, color: currentColor, strokeWidth: actualStrokeWidth, type: penType });
           }}
           onResponderMove={(e) => {
             if(!currentPath) return;
@@ -702,7 +704,9 @@ const VeTranhGameNative = ({ mode, setMode, selectedBg, setSelectedBg, onBack, a
             const { locationX, locationY } = e.nativeEvent;
             const newPath = Skia.Path.Make();
             newPath.moveTo(locationX, locationY);
-            setCurrentPath({ path: newPath, color: currentColor, strokeWidth, type: penType });
+            // Tẩy thì cộng thêm 15 cho bự ra
+            const actualStrokeWidth = penType === 'tay' ? strokeWidth + 15 : strokeWidth;
+            setCurrentPath({ path: newPath, color: currentColor, strokeWidth: actualStrokeWidth, type: penType });
           }}
           onResponderMove={(e) => {
             if (!currentPath) return;
@@ -957,7 +961,10 @@ const styles = StyleSheet.create({
   penTypeBtn: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 15, borderWidth: 2, borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' },
   penTypeActive: { borderColor: '#3B82F6', backgroundColor: '#EFF6FF' },
   sliderContainer: { flexDirection: 'row', alignItems: 'center' },
-  colorPalette: { paddingHorizontal: 15, gap: 12, alignItems: 'center' },
+  
+  // Tèo độ lại chỗ này để bóng màu không bị cắt 2 đầu nè:
+  colorPalette: { paddingHorizontal: 15, paddingVertical: 10, gap: 12, alignItems: 'center' },
+  
   colorBubble: { width: 45, height: 45, borderRadius: 25, borderWidth: 3, borderColor: 'white', elevation: 3 },
   colorBubbleActive: { transform: [{ scale: 1.2 }], borderColor: '#4B5563' },
 });
