@@ -24,52 +24,54 @@ export default function LearningScreen() {
   const [score, setScore] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
   
-  const [randomImage, setRandomImage] = useState(GIOI_IMAGES[0]); 
+  const [randomImage, setRandomImage] = useState<any>(null); 
   const [randomVideo, setRandomVideo] = useState<any>(null); 
   const [childName, setChildName] = useState('Bé yêu');
   const [showVideoPopup, setShowVideoPopup] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const [filteredGioiImages, setFilteredGioiImages] = useState<any[]>([...GIOI_IMAGES]);
-  const [filteredTotImages, setFilteredTotImages] = useState<any[]>([...TOT_IMAGES]);
-  const [filteredCanImages, setFilteredCanImages] = useState<any[]>([...CAN_CO_GAN_IMAGES]);
-
   const unseenGioi = useRef([...GIOI_VIDEOS]);
   const unseenTot = useRef([...TOT_VIDEOS]);
   const unseenCanCoGan = useRef([...CAN_CO_GAN_VIDEOS]);
 
-  useEffect(() => { Asset.loadAsync(ALL_IMAGES).catch(()=>{}); }, []);
+  // Bộ lọc ảnh điểm
+  const [filteredGioi, setFilteredGioi] = useState<any[]>([]);
+  const [filteredTot, setFilteredTot] = useState<any[]>([]);
+  const [filteredCan, setFilteredCan] = useState<any[]>([]);
 
-  useFocusEffect(useCallback(() => { fetchSettings(); fetchChildName(); loadCustomMedia(); }, []));
+  useEffect(() => {
+    const preloadAssets = async () => { try { await Asset.loadAsync(ALL_IMAGES); } catch (e) {} };
+    preloadAssets();
+  }, []);
 
-  const loadCustomMedia = async () => {
+  useFocusEffect(
+    useCallback(() => {
+      fetchSettings();
+      fetchChildName(); 
+      loadMediaFilters(); 
+    }, [])
+  );
+
+  const loadMediaFilters = async () => {
     try {
-      const storedBlacklist = await AsyncStorage.getItem('@blacklist_media');
-      const blacklist = storedBlacklist ? JSON.parse(storedBlacklist) : [];
-
-      const fGioi = GIOI_IMAGES.filter((_, i) => !blacklist.includes(`default_tinh_diem_gioi_${i}`));
-      const fTot = TOT_IMAGES.filter((_, i) => !blacklist.includes(`default_tinh_diem_tot_${i}`));
-      const fCan = CAN_CO_GAN_IMAGES.filter((_, i) => !blacklist.includes(`default_tinh_diem_can_${i}`));
-
+      const storedHidden = await AsyncStorage.getItem('@media_hidden');
+      const hiddenIds = storedHidden ? JSON.parse(storedHidden) : [];
       const storedData = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
-      if (storedData) {
-        const parsed = JSON.parse(storedData);
-        if (parsed.tinh_diem && parsed.tinh_diem.length > 0) {
-          const customs = parsed.tinh_diem.filter((item: any) => !blacklist.includes(item.id)).map((item:any) => ({ uri: item.uri }));
-          setFilteredGioiImages([...fGioi, ...customs]);
-          setFilteredTotImages([...fTot, ...customs]);
-          setFilteredCanImages(fCan);
-        } else {
-          setFilteredGioiImages(fGioi); setFilteredTotImages(fTot); setFilteredCanImages(fCan);
-        }
-      } else {
-         setFilteredGioiImages(fGioi); setFilteredTotImages(fTot); setFilteredCanImages(fCan);
-      }
+      const customData = storedData ? JSON.parse(storedData) : {};
+      const customTinhDiem = (customData.tinh_diem || []).filter((i:any) => !hiddenIds.includes(i.id)).map((i:any)=> ({ uri: i.uri }));
+
+      const baseGioi = GIOI_IMAGES.map((img, i) => ({ id: `def_gioi_${i}`, uri: img })).filter(i => !hiddenIds.includes(i.id));
+      const baseTot = TOT_IMAGES.map((img, i) => ({ id: `def_tot_${i}`, uri: img })).filter(i => !hiddenIds.includes(i.id));
+      const baseCan = CAN_CO_GAN_IMAGES.map((img, i) => ({ id: `def_ccan_${i}`, uri: img })).filter(i => !hiddenIds.includes(i.id));
+
+      setFilteredGioi([...baseGioi, ...customTinhDiem]);
+      setFilteredTot([...baseTot, ...customTinhDiem]);
+      setFilteredCan([...baseCan]); // Có thể thêm custom cho cố gắng nếu muốn
     } catch (e) {}
   };
 
   const fetchChildName = async () => {
-    try { const saved = await AsyncStorage.getItem('childName'); if (saved) setChildName(saved); } catch (e) {}
+    try { const savedName = await AsyncStorage.getItem('childName'); if (savedName) setChildName(savedName); } catch (e) {}
   };
 
   const fetchSettings = async () => {
@@ -87,36 +89,31 @@ export default function LearningScreen() {
     setIsSubmitted(false);
     let additions: Problem[] = []; let subtractions: Problem[] = [];
     const usedCombos = new Set<string>(); const safeLimit = Math.max(limit, 2);
-    let numAdd = 0, numSub = 0;
-    if (type === 'cong') numAdd = 10; else if (type === 'tru') numSub = 10; else { numAdd = 5; numSub = 5; } 
+    let numAdd = type === 'cong' ? 10 : type === 'tru' ? 0 : 5;
+    let numSub = type === 'tru' ? 10 : type === 'cong' ? 0 : 5;
 
     let attempts = 0;
     while (additions.length < numAdd && attempts < 100) {
-      attempts++;
-      let num1 = Math.floor(Math.random() * (safeLimit - 1)) + 1; 
-      let num2 = Math.floor(Math.random() * (safeLimit - num1)) + 1; 
+      attempts++; let num1 = Math.floor(Math.random() * (safeLimit - 1)) + 1; let num2 = Math.floor(Math.random() * (safeLimit - num1)) + 1; 
       const comboKey = `${num1}+${num2}`;
       if (!usedCombos.has(comboKey)) { usedCombos.add(comboKey); additions.push({ id: 0, num1, num2, operator: '+', userAnswer: '' }); }
     }
-    while (additions.length < numAdd) {
-      let num1 = Math.floor(Math.random() * (safeLimit - 1)) + 1; let num2 = Math.floor(Math.random() * (safeLimit - num1)) + 1;
-      additions.push({ id: 0, num1, num2, operator: '+', userAnswer: '' });
-    }
+    while (additions.length < numAdd) { let n1 = Math.floor(Math.random() * (safeLimit - 1)) + 1; additions.push({ id: 0, num1: n1, num2: Math.floor(Math.random() * (safeLimit - n1)) + 1, operator: '+', userAnswer: '' }); }
 
-    let hasZero = false; attempts = 0;
+    let hasZeroResultProblem = false; attempts = 0;
     while (subtractions.length < numSub && attempts < 100) {
-      attempts++;
-      let num1 = Math.floor(Math.random() * safeLimit) + 1; 
-      if (hasZero && num1 === 1) continue; 
-      let num2 = hasZero ? Math.floor(Math.random() * (num1 - 1)) + 1 : Math.floor(Math.random() * num1) + 1;
+      attempts++; let num1 = Math.floor(Math.random() * safeLimit) + 1; 
+      if (hasZeroResultProblem && num1 === 1) continue; 
+      let num2 = hasZeroResultProblem ? Math.floor(Math.random() * (num1 - 1)) + 1 : Math.floor(Math.random() * num1) + 1;
       const comboKey = `${num1}-${num2}`;
-      if (!usedCombos.has(comboKey)) { usedCombos.add(comboKey); subtractions.push({ id: 0, num1, num2, operator: '-', userAnswer: '' }); if (num1 === num2) hasZero = true; }
+      if (!usedCombos.has(comboKey)) { usedCombos.add(comboKey); subtractions.push({ id: 0, num1, num2, operator: '-', userAnswer: '' }); if (num1 === num2) hasZeroResultProblem = true; }
     }
     while (subtractions.length < numSub) {
-      let num1 = Math.floor(Math.random() * safeLimit) + 1; if (hasZero && num1 === 1) num1 = 2; 
-      let num2 = hasZero ? Math.floor(Math.random() * (num1 - 1)) + 1 : Math.floor(Math.random() * num1) + 1;
-      subtractions.push({ id: 0, num1, num2, operator: '-', userAnswer: '' }); if (num1 === num2) hasZero = true;
+      let num1 = Math.floor(Math.random() * safeLimit) + 1; if (hasZeroResultProblem && num1 === 1) num1 = 2; 
+      let num2 = hasZeroResultProblem ? Math.floor(Math.random() * (num1 - 1)) + 1 : Math.floor(Math.random() * num1) + 1;
+      subtractions.push({ id: 0, num1, num2, operator: '-', userAnswer: '' }); if (num1 === num2) hasZeroResultProblem = true;
     }
+
     const combined = [...additions, ...subtractions];
     for (let i = combined.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [combined[i], combined[j]] = [combined[j], combined[i]]; }
     return combined.map((prob, index) => ({ ...prob, id: index }));
@@ -124,39 +121,40 @@ export default function LearningScreen() {
 
   const handleKeyPress = (val: string) => {
     if (activeInputIndex === null) return; setIsSubmitted(false);
-    setProblems(prev => { const newP = [...prev]; if (newP[activeInputIndex].userAnswer.length < 3) newP[activeInputIndex].userAnswer += val; return newP; });
+    setProblems(prev => { const newProbs = [...prev]; if (newProbs[activeInputIndex].userAnswer.length < 3) newProbs[activeInputIndex].userAnswer += val; return newProbs; });
   };
-
   const handleDelete = () => {
     if (activeInputIndex === null) return; setIsSubmitted(false);
-    setProblems(prev => { const newP = [...prev]; newP[activeInputIndex].userAnswer = newP[activeInputIndex].userAnswer.slice(0, -1); return newP; });
+    setProblems(prev => { const newProbs = [...prev]; newProbs[activeInputIndex].userAnswer = newProbs[activeInputIndex].userAnswer.slice(0, -1); return newProbs; });
   };
 
   const handleSubmit = () => {
     setActiveInputIndex(null);
-    if (!problems.every(p => p.userAnswer !== '')) {
-      if (Platform.OS === 'web') window.alert(`Khoan đã! ${childName} chưa làm xong hết 10 câu kìa!`);
-      else Alert.alert('Khoan đã!', `${childName} chưa làm xong hết 10 câu kìa!`); return;
-    }
+    if (!problems.every(p => p.userAnswer !== '')) { Alert.alert('Khoan đã!', `${childName} chưa làm xong!`); return; }
+
     let currentScore = 0;
-    problems.forEach(p => { const expected = p.operator === '+' ? p.num1 + p.num2 : p.num1 - p.num2; if (expected === parseInt(p.userAnswer, 10)) currentScore += 1; });
+    problems.forEach(p => { if ((p.operator === '+' ? p.num1 + p.num2 : p.num1 - p.num2) === parseInt(p.userAnswer, 10)) currentScore += 1; });
     setScore(currentScore); setIsSubmitted(true);
     
-    let selectedArr: any[] = []; let origVidArr: any[] = []; let unseenRef: any;
-    if (currentScore >= 9) { selectedArr = filteredGioiImages; origVidArr = GIOI_VIDEOS; unseenRef = unseenGioi; } 
-    else if (currentScore >= 6) { selectedArr = filteredTotImages; origVidArr = TOT_VIDEOS; unseenRef = unseenTot; } 
-    else { selectedArr = filteredCanImages; origVidArr = CAN_CO_GAN_VIDEOS; unseenRef = unseenCanCoGan; }
+    let selectedImageArray = currentScore >= 9 ? filteredGioi : currentScore >= 6 ? filteredTot : filteredCan;
+    let originalVideoArray = currentScore >= 9 ? GIOI_VIDEOS : currentScore >= 6 ? TOT_VIDEOS : CAN_CO_GAN_VIDEOS;
+    let unseenRef = currentScore >= 9 ? unseenGioi : currentScore >= 6 ? unseenTot : unseenCanCoGan;
 
-    if (selectedArr.length > 0) setRandomImage(selectedArr[Math.floor(Math.random() * selectedArr.length)]);
-    if (origVidArr.length > 0) {
-        if (unseenRef.current.length === 0) unseenRef.current = [...origVidArr];
-        const rIdx = Math.floor(Math.random() * unseenRef.current.length);
-        setRandomVideo(unseenRef.current[rIdx]); unseenRef.current.splice(rIdx, 1);
+    if (selectedImageArray.length > 0) setRandomImage(selectedImageArray[Math.floor(Math.random() * selectedImageArray.length)].uri);
+    else setRandomImage(null);
+
+    if (originalVideoArray.length > 0) {
+        if (unseenRef.current.length === 0) unseenRef.current = [...originalVideoArray];
+        const randomIndex = Math.floor(Math.random() * unseenRef.current.length);
+        setRandomVideo(unseenRef.current[randomIndex]);
+        unseenRef.current.splice(randomIndex, 1);
     } else setRandomVideo(null); 
     
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-    setTimeout(() => { if (origVidArr.length > 0) setShowVideoPopup(true); }, 1000); 
+    setTimeout(() => { if (originalVideoArray.length > 0) setShowVideoPopup(true); }, 1000); 
   };
+
+  const handleReplay = () => { setProblems(createNewProblems(maxLimit, mathType)); scrollViewRef.current?.scrollTo({ y: 0, animated: true }); setShowVideoPopup(false); };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -165,31 +163,32 @@ export default function LearningScreen() {
         <View style={styles.exerciseColumn}>
           <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {problems.map((p, index) => {
-              const expected = p.operator === '+' ? p.num1 + p.num2 : p.num1 - p.num2;
-              const isWrong = isSubmitted && parseInt(p.userAnswer, 10) !== expected;
+              const correctAnswer = p.operator === '+' ? p.num1 + p.num2 : p.num1 - p.num2;
+              const isWrong = isSubmitted && parseInt(p.userAnswer, 10) !== correctAnswer;
               return (
                 <View key={p.id} style={styles.problemRow}>
                   <Text style={[styles.problemText, { color: colors.text }]}>Câu {index + 1}:</Text>
                   <View style={styles.mathExpression}>
                     <Text style={[styles.mathText, { color: colors.text }]}>{p.num1} {p.operator} {p.num2} =</Text>
-                    <TouchableOpacity style={[styles.answerBox, activeInputIndex === index && styles.activeAnswerBox, isWrong && styles.wrongAnswerBox, { borderColor: activeInputIndex === index ? '#1D4ED8' : isWrong ? '#EF4444' : colors.border }]} onPress={() => { if (!isSubmitted) setActiveInputIndex(index); }}>
+                    <TouchableOpacity style={[styles.answerBox, activeInputIndex === index && styles.activeAnswerBox, isWrong && styles.wrongAnswerBox, { backgroundColor: colors.card, borderColor: activeInputIndex === index ? '#1D4ED8' : isWrong ? '#EF4444' : colors.border }]} onPress={() => { if (!isSubmitted) setActiveInputIndex(index); }} disabled={isSubmitted}>
                       <Text style={[styles.answerText, isWrong ? { color: '#EF4444' } : { color: colors.text }]}>{p.userAnswer || '?'}</Text>
                     </TouchableOpacity>
-                    {isWrong && <View style={styles.correctionBadge}><Text style={styles.correctionText}>{expected}</Text></View>}
+                    {isWrong && <View style={styles.correctionBadge}><Text style={styles.correctionText}>{correctAnswer}</Text></View>}
                   </View>
                 </View>
               );
             })}
           </ScrollView>
         </View>
+
         <View style={styles.numpadColumn}>
           {isSubmitted ? (
             <View style={styles.scoreBoardContainer}>
-              {score === 10 && <ConfettiCannon count={200} origin={{x: -10, y: 0}} fallSpeed={2500} autoStart={true} />}
+              {score === 10 && <ConfettiCannon count={200} origin={{x: -10, y: 0}} fallSpeed={2500} fadeOut autoStart />}
               <Text style={styles.modalTitle}>🎉 KẾT QUẢ 🎉</Text><Text style={styles.scoreText}>{score}</Text>
               {randomImage && <Image source={typeof randomImage === 'string' ? {uri: randomImage} : randomImage} style={styles.funnyImage} />}
               <Text style={styles.messageText}>{score >= 9 ? `Xuất sắc! ${childName} quá đỉnh! 🌟` : score >= 6 ? `Giỏi lắm ${childName}! Ráng đúng hết nha! 💪` : `${childName} ơi cẩn thận hơn nha bé! 🎈`}</Text>
-              <TouchableOpacity style={styles.replayBtn} onPress={() => {setProblems(createNewProblems(maxLimit, mathType)); setShowVideoPopup(false);}}><Text style={styles.replayBtnText}>Làm Lại Bài Mới 🔄</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.replayBtn} onPress={handleReplay}><Text style={styles.replayBtnText}>Làm Lại Bài Mới 🔄</Text></TouchableOpacity>
             </View>
           ) : activeInputIndex !== null ? (
             <View style={styles.numpadContainer}>
@@ -202,11 +201,14 @@ export default function LearningScreen() {
                 <TouchableOpacity style={styles.numpadBtn} onPress={() => handleKeyPress('0')}><Text style={styles.numpadText}>0</Text></TouchableOpacity>
                 <TouchableOpacity style={[styles.numpadBtn, { backgroundColor: '#10B981' }]} onPress={() => setActiveInputIndex(null)}><Text style={[styles.numpadText, { color: 'white' }]}>OK</Text></TouchableOpacity>
               </View>
-              <TouchableOpacity style={styles.submitBtnRight} onPress={handleSubmit}><Text style={styles.submitBtnRightText}>🏆 CHẤM ĐIỂM 🏆</Text></TouchableOpacity>
+              <View style={styles.submitContainer}><TouchableOpacity style={styles.submitBtnRight} onPress={handleSubmit} activeOpacity={0.8}><Text style={styles.submitBtnRightText}>🏆 CHẤM ĐIỂM 🏆</Text></TouchableOpacity></View>
             </View>
-          ) : ( <View style={styles.placeholderNumpad}><Ionicons name="calculator-outline" size={80} color={colors.border} /><Text style={{ color: 'gray', marginTop: 10, fontSize: 18, textAlign: 'center' }}>Chạm vào ô dấu "?" để mở bàn phím</Text></View> )}
+          ) : (
+             <View style={styles.placeholderNumpad}><Ionicons name="calculator-outline" size={80} color={colors.border} /><Text style={{ color: 'gray', marginTop: 10, fontSize: 18, textAlign: 'center' }}>Chạm vào ô dấu "?" để mở bàn phím</Text></View>
+          )}
         </View>
       </View>
+
       <Modal visible={showVideoPopup && randomVideo !== null} transparent={true} animationType="fade">
         <View style={styles.videoOverlay}>
           <View style={styles.videoWrapper}>
@@ -229,10 +231,10 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 50 },
   problemRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, backgroundColor: 'rgba(255,255,255,0.5)', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 15 },
   problemText: { fontSize: 22, fontWeight: 'bold', width: 105, color: '#4B5563' },
-  mathExpression: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  mathExpression: { flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-start' },
   mathText: { fontSize: 32, fontWeight: 'bold', letterSpacing: 2, marginRight: 15 },
   answerBox: { width: 80, height: 60, borderWidth: 3, borderRadius: 15, justifyContent: 'center', alignItems: 'center', backgroundColor: 'white' },
-  activeAnswerBox: { borderWidth: 4, backgroundColor: '#DBEAFE', shadowColor: '#1D4ED8', elevation: 6 },
+  activeAnswerBox: { borderWidth: 4, backgroundColor: '#DBEAFE', shadowColor: '#1D4ED8', shadowOffset: {width: 0, height: 0}, shadowOpacity: 0.6, shadowRadius: 10, elevation: 6 },
   wrongAnswerBox: { backgroundColor: '#FEF2F2' },
   answerText: { fontSize: 32, fontWeight: 'bold' },
   correctionBadge: { marginLeft: 15, backgroundColor: '#DCFCE7', width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#22C55E' },
@@ -240,10 +242,11 @@ const styles = StyleSheet.create({
   numpadContainer: { width: '100%', maxWidth: 350, backgroundColor: '#F3F4F6', padding: 15, borderRadius: 20, borderWidth: 2, borderColor: '#D1D5DB' },
   numpadTitle: { textAlign: 'center', fontSize: 20, fontWeight: 'bold', marginBottom: 15, color: '#374151' },
   numpadRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  numpadBtn: { width: '30%', aspectRatio: 1.2, backgroundColor: 'white', borderRadius: 15, justifyContent: 'center', alignItems: 'center', elevation: 4 },
+  numpadBtn: { width: '30%', aspectRatio: 1.2, backgroundColor: 'white', borderRadius: 15, justifyContent: 'center', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3, elevation: 4 },
   numpadText: { fontSize: 30, fontWeight: 'bold', color: '#1F2937' },
   placeholderNumpad: { alignItems: 'center', justifyContent: 'center', flex: 1 },
-  submitBtnRight: { width: '100%', backgroundColor: '#F59E0B', paddingVertical: 18, borderRadius: 15, alignItems: 'center', marginTop: 15, elevation: 5 },
+  submitContainer: { width: '100%', alignItems: 'center', paddingTop: 15 },
+  submitBtnRight: { width: '100%', backgroundColor: '#F59E0B', paddingVertical: 18, borderRadius: 15, alignItems: 'center', justifyContent: 'center', elevation: 5 },
   submitBtnRightText: { color: 'white', fontSize: 24, fontWeight: '900' },
   scoreBoardContainer: { width: '100%', maxWidth: 350, backgroundColor: 'white', padding: 20, borderRadius: 25, alignItems: 'center', borderWidth: 5, borderColor: '#FCD34D', elevation: 8 },
   modalTitle: { fontSize: 28, fontWeight: '900', color: '#F59E0B', marginBottom: 5 },
