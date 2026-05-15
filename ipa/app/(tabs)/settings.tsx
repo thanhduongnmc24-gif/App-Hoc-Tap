@@ -1,425 +1,332 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert, ActivityIndicator, Modal, Image, TextInput, Dimensions, Platform } from 'react-native';
+import { View, Text, Switch, TouchableOpacity, Alert, StyleSheet, TextInput, KeyboardAvoidingView, Platform, ScrollView, Modal, Image } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const { width } = Dimensions.get('window');
+import { GIOI_IMAGES, TOT_IMAGES, CAN_CO_GAN_IMAGES } from '../../constants/kho_anh';
+import { GIOI_VIDEOS, TOT_VIDEOS, CAN_CO_GAN_VIDEOS } from '../../constants/kho_video';
 
-type MathType = 'cong' | 'tru' | 'ca_hai';
+// TÈO ĐÃ ĐỔI TÊN IMPORT CHO ĐÚNG VỚI FILE CỦA BA NÈ
+import { TAP_DOC_DATA } from '../../constants/kho_tap_doc';
+// (Lưu ý: Ba nhớ đảm bảo file kho_dong_vat.ts cũng export ra DONG_VAT_DATA giống vậy nha)
+//import { DONG_VAT_DATA } from '../../constants/kho_dong_vat';
 
-type MediaType = 'to_mau' | 'tinh_diem' | 'tap_doc' | 'thu_thach';
-interface CustomMedia {
-  id: string;
-  uri: string;
-  name: string;
-  category: MediaType;
-  type: 'image' | 'video';
-}
+// Phân loại danh mục
+const CATEGORIES = [
+  { id: 'tap_doc_image', name: 'Ảnh Tập Đọc', type: 'image', defaults: TAP_DOC_DATA || [] },
+  //{ id: 'noi_tu_image', name: 'Ảnh Nối Từ', type: 'image', defaults: DONG_VAT_DATA || [] },
+  { id: 'gioi_image', name: 'Ảnh Bé Xuất Sắc', type: 'image', defaults: GIOI_IMAGES || [] },
+  { id: 'gioi_video', name: 'Video Bé Xuất Sắc', type: 'video', defaults: GIOI_VIDEOS || [] },
+  { id: 'tot_image', name: 'Ảnh Bé Làm Tốt', type: 'image', defaults: TOT_IMAGES || [] },
+  { id: 'tot_video', name: 'Video Bé Làm Tốt', type: 'video', defaults: TOT_VIDEOS || [] },
+  { id: 'can_co_gan_image', name: 'Ảnh Bé Cố Gắng', type: 'image', defaults: CAN_CO_GAN_IMAGES || [] },
+  { id: 'can_co_gan_video', name: 'Video Bé Cố Gắng', type: 'video', defaults: CAN_CO_GAN_VIDEOS || [] },
+];
 
-const CATEGORY_NAMES = {
-  to_mau: '🎨 Ảnh Tô Màu',
-  tinh_diem: '💯 Ảnh Tính Điểm',
-  tap_doc: '📚 Ảnh Tập Đọc',
-  thu_thach: '🎲 Ảnh Thử Thách',
-};
+export type CustomMedia = { id: string; uri: string; name: string; categoryId: string; type: string; isActive: boolean; };
 
 export default function SettingsScreen() {
-  const { colors, theme, toggleTheme } = useTheme(); 
-  const [maxLimit, setMaxLimit] = useState(10);
-  const [mathType, setMathType] = useState<MathType>('ca_hai'); 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const { theme, toggleTheme, colors } = useTheme();
+  const [userEmail] = useState('Chế độ Offline');
+  const [maxLimit, setMaxLimit] = useState('10');
+  const [childName, setChildName] = useState('Bé yêu'); 
+  const [loading, setLoading] = useState(false);
 
-  const isDarkMode = theme === 'dark';
-
-  const [mediaData, setMediaData] = useState<Record<MediaType, CustomMedia[]>>({
-    to_mau: [], tinh_diem: [], tap_doc: [], thu_thach: []
-  });
-  
-  const [activeCategory, setActiveCategory] = useState<MediaType | null>(null);
-  
-  const [selectedItem, setSelectedItem] = useState<CustomMedia | null>(null);
-  const [editName, setEditName] = useState('');
+  const [showMediaManager, setShowMediaManager] = useState(false);
+  const [selectedCat, setSelectedCat] = useState(CATEGORIES[0]);
+  const [customMedia, setCustomMedia] = useState<CustomMedia[]>([]);
+  const [disabledDefaults, setDisabledDefaults] = useState<string[]>([]);
+  const [renamedDefaults, setRenamedDefaults] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    fetchSettings();
-    loadCustomMedia();
+    fetchLocalData();
   }, []);
 
-  // ==========================================
-  // XỬ LÝ CÀI ĐẶT TOÁN HỌC (ĐÃ CHUYỂN QUA ASYNC STORAGE)
-  // ==========================================
-  const fetchSettings = async () => {
+  const fetchLocalData = async () => {
     try {
-      const storedSettings = await AsyncStorage.getItem('@settings_toan');
-      if (storedSettings) {
-        const { max_limit, loai_phep_tinh } = JSON.parse(storedSettings);
-        setMaxLimit(max_limit || 10);
-        setMathType((loai_phep_tinh as MathType) || 'ca_hai');
-      }
-    } catch (error) {
-      console.log('Lỗi lấy cài đặt cục bộ:', error);
+      const savedName = await AsyncStorage.getItem('childName');
+      if (savedName) setChildName(savedName);
+
+      const savedLimit = await AsyncStorage.getItem('maxLimit');
+      if (savedLimit) setMaxLimit(savedLimit);
+
+      const savedMedia = await AsyncStorage.getItem('customMedia');
+      if (savedMedia) setCustomMedia(JSON.parse(savedMedia));
+
+      const savedDisabled = await AsyncStorage.getItem('disabledDefaults');
+      if (savedDisabled) setDisabledDefaults(JSON.parse(savedDisabled));
+
+      const savedRenamed = await AsyncStorage.getItem('renamedDefaults');
+      if (savedRenamed) setRenamedDefaults(JSON.parse(savedRenamed));
+    } catch (e) {
+      console.log('Lỗi lấy dữ liệu:', e);
+    }
+  };
+
+  const saveBaseSettings = async () => {
+    setLoading(true);
+    try {
+      await AsyncStorage.setItem('childName', childName);
+      await AsyncStorage.setItem('maxLimit', maxLimit || '10');
+      Alert.alert('Thành công', 'Đã lưu cấu hình học tập cho bé!');
+    } catch (e) {
+      Alert.alert('Lỗi', 'Không thể lưu cài đặt.');
     } finally {
       setLoading(false);
     }
   };
 
-  const updateSettings = async (newLimit: number, newType: MathType) => {
-    setSaving(true);
-    try {
-      const newSettings = JSON.stringify({ max_limit: newLimit, loai_phep_tinh: newType });
-      await AsyncStorage.setItem('@settings_toan', newSettings);
-    } catch (error) {
-      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được cài đặt rồi anh hai ơi!');
-    } finally {
-      setSaving(false);
-    }
+  const saveMediaState = async (newCustom: CustomMedia[], newDisabled: string[], newRenamed: Record<string, string>) => {
+    await AsyncStorage.setItem('customMedia', JSON.stringify(newCustom));
+    await AsyncStorage.setItem('disabledDefaults', JSON.stringify(newDisabled));
+    await AsyncStorage.setItem('renamedDefaults', JSON.stringify(newRenamed));
   };
 
-  // ==========================================
-  // XỬ LÝ KHO DỮ LIỆU CỦA BÉ
-  // ==========================================
-  const loadCustomMedia = async () => {
-    try {
-      const storedData = await AsyncStorage.getItem('@kho_du_lieu_cua_be');
-      if (storedData) {
-        setMediaData(JSON.parse(storedData));
-      }
-    } catch (error) {
-      console.log('Lỗi tải dữ liệu nội bộ:', error);
+  const toggleDefaultMedia = async (index: number) => {
+    const key = `${selectedCat.id}_${index}`;
+    let newDisabled = [...disabledDefaults];
+    if (newDisabled.includes(key)) {
+      newDisabled = newDisabled.filter(k => k !== key); 
+    } else {
+      newDisabled.push(key); 
     }
+    setDisabledDefaults(newDisabled);
+    await saveMediaState(customMedia, newDisabled, renamedDefaults);
   };
 
-  const saveCustomMedia = async (newData: Record<MediaType, CustomMedia[]>) => {
-    try {
-      await AsyncStorage.setItem('@kho_du_lieu_cua_be', JSON.stringify(newData));
-      setMediaData(newData);
-    } catch (error) {
-      if (Platform.OS !== 'web') Alert.alert('Lỗi', 'Không lưu được ảnh vào bộ nhớ máy!');
-    }
+  const updateDefaultMediaName = async (index: number, newName: string) => {
+    const key = `${selectedCat.id}_${index}`;
+    const newRenamed = { ...renamedDefaults, [key]: newName };
+    setRenamedDefaults(newRenamed);
+    await saveMediaState(customMedia, disabledDefaults, newRenamed);
   };
 
-  const handleAddMedia = async () => {
-    if (!activeCategory) return;
+  const toggleCustomMedia = async (id: string) => {
+    const newCustom = customMedia.map(m => m.id === id ? { ...m, isActive: !m.isActive } : m);
+    setCustomMedia(newCustom);
+    await saveMediaState(newCustom, disabledDefaults, renamedDefaults);
+  };
 
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted === false) {
-      if (Platform.OS !== 'web') Alert.alert("Cấp quyền", "Anh hai cho Tèo xin quyền vào kho ảnh mới lấy hình được nha!");
-      return;
-    }
+  const updateCustomMediaName = async (id: string, newName: string) => {
+    const newCustom = customMedia.map(m => m.id === id ? { ...m, name: newName } : m);
+    setCustomMedia(newCustom);
+    await saveMediaState(newCustom, disabledDefaults, renamedDefaults);
+  };
 
+  const pickAndSaveMedia = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: false,
-      quality: 0.8,
+      mediaTypes: selectedCat.type === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 1,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      const asset = result.assets[0];
-      let finalUri = asset.uri;
-
-      if (Platform.OS !== 'web') {
-        const fileName = asset.uri.split('/').pop() || `file_${Date.now()}`;
-        
-        // @ts-ignore
-        const safeDocDir = FileSystem.documentDirectory;
-        
-        if (!safeDocDir) {
-           Alert.alert("Thiếu lõi Native 🚨", "Anh hai vừa cài expo-file-system nhưng chưa build lại app. Hãy chạy lệnh 'npx expo run:ios' (hoặc android) để nhúng lõi vào máy ảo/điện thoại nha!");
-           return;
-        }
-
-        const newPath = `${safeDocDir}${fileName}`;
-
-        try {
-          await FileSystem.copyAsync({ from: asset.uri, to: newPath });
-          finalUri = newPath; 
-        } catch (error) {
-          Alert.alert('Lỗi', 'Lưu file thất bại. Anh hai thử lại xem!');
-          return;
-        }
+      const docDir = (FileSystem as any).documentDirectory;
+      
+      if (!docDir) {
+        Alert.alert('Lỗi', 'Không tìm thấy thư mục lưu trữ trên thiết bị này!');
+        return;
       }
 
-      const newItem: CustomMedia = {
-        id: Date.now().toString(),
-        uri: finalUri,
-        name: `Ảnh ${mediaData[activeCategory].length + 1}`,
-        category: activeCategory,
-        type: asset.type === 'video' ? 'video' : 'image',
-      };
+      const sourceUri = result.assets[0].uri;
+      const filename = sourceUri.split('/').pop() || `media_${Date.now()}`;
+      const destUri = `${docDir}${filename}`;
 
-      const updatedData = { ...mediaData, [activeCategory]: [...mediaData[activeCategory], newItem] };
-      await saveCustomMedia(updatedData);
-    }
-  };
-
-  const handleRename = async () => {
-    if (!selectedItem || !editName.trim()) return;
-
-    const updatedCategoryList = mediaData[selectedItem.category].map(item => 
-      item.id === selectedItem.id ? { ...item, name: editName.trim() } : item
-    );
-
-    const updatedData = { ...mediaData, [selectedItem.category]: updatedCategoryList };
-    await saveCustomMedia(updatedData);
-    
-    setSelectedItem({ ...selectedItem, name: editName.trim() });
-    
-    if (Platform.OS !== 'web') {
-        Alert.alert('Thành công', 'Đã đổi tên mượt mà!');
-    } else {
-        window.alert('Thành công: Đã đổi tên mượt mà!'); 
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!selectedItem) return;
-
-    const executeDelete = async () => {
       try {
-        if (Platform.OS !== 'web') {
-            // @ts-ignore
-            if (FileSystem.documentDirectory) {
-                await FileSystem.deleteAsync(selectedItem.uri, { idempotent: true });
-            }
-        }
+        await FileSystem.copyAsync({ from: sourceUri, to: destUri });
         
-        const updatedCategoryList = mediaData[selectedItem.category].filter(item => item.id !== selectedItem.id);
-        const updatedData = { ...mediaData, [selectedItem.category]: updatedCategoryList };
+        const newItem: CustomMedia = {
+          id: Date.now().toString(),
+          uri: destUri,
+          name: `Từ vựng mới`, 
+          categoryId: selectedCat.id,
+          type: selectedCat.type,
+          isActive: true
+        };
         
-        await saveCustomMedia(updatedData);
-        setSelectedItem(null); 
-      } catch (error) {
-        if (Platform.OS !== 'web') Alert.alert("Lỗi", "Không xóa được file rồi!");
+        const newCustom = [...customMedia, newItem];
+        setCustomMedia(newCustom);
+        await saveMediaState(newCustom, disabledDefaults, renamedDefaults);
+        Alert.alert('Thành công', 'Đã thêm vào kho! Ba nhớ đổi tên nhé.');
+      } catch (err) {
+        Alert.alert('Lỗi', 'Không thể lưu file này vào máy.');
       }
-    };
-
-    if (Platform.OS !== 'web') {
-        Alert.alert("Xóa Dữ Liệu", "Anh hai có chắc muốn xóa file này không?", [
-          { text: "Hủy", style: "cancel" },
-          { text: "Xóa Trắng", style: "destructive", onPress: executeDelete }
-        ]);
-    } else {
-        const confirmDelete = window.confirm("Anh hai có chắc muốn xóa file này không?");
-        if (confirmDelete) executeDelete();
     }
   };
 
-
-  if (loading) {
-    return (
-      <View style={[styles.container, { backgroundColor: colors.bg, justifyContent: 'center' }]}>
-        <ActivityIndicator size="large" color="#4F46E5" />
-      </View>
-    );
-  }
+  const handleLogout = () => {
+    Alert.alert('Thông báo', 'App đang chạy hoàn toàn trên máy, không cần đăng xuất đâu ba nhé!');
+  };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.bg }]}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Cài Đặt</Text>
-        {saving && <ActivityIndicator size="small" color="#4F46E5" />}
-      </View>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, backgroundColor: colors.bg }}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        
+        <View style={styles.header}>
+             <View style={styles.profileIcon}>
+                <Ionicons name="school" size={40} color="white" />
+             </View>
+             <Text style={[styles.email, { color: colors.text }]}>{userEmail}</Text>
+        </View>
 
-      {/* --- KHO DỮ LIỆU CỦA BÉ --- */}
-      <View style={[styles.section, { backgroundColor: '#F0FDF4', borderColor: '#86EFAC', borderWidth: 2 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15 }}>
-          <Text style={{ fontSize: 24, marginRight: 10 }}>🎁</Text>
-          <View>
-            <Text style={[styles.sectionTitle, { color: '#166534', marginBottom: 0 }]}>Kho Dữ Liệu Của Bé</Text>
-            <Text style={{ color: '#15803D', fontSize: 12 }}>Thêm ảnh gia đình vào game</Text>
-            {Platform.OS === 'web' && (
-              <Text style={{ color: '#EF4444', fontSize: 10, marginTop: 2, fontStyle: 'italic' }}>*Bản Web: Ảnh tải lên sẽ mất khi f5 trang</Text>
-            )}
+        <View style={[styles.section, { backgroundColor: colors.card }]}>
+          <View style={[styles.row, { marginBottom: 15 }]}>
+            <Text style={{ color: colors.text, fontSize: 18, fontWeight: 'bold' }}>Tên của bé:</Text>
+            <TextInput style={[styles.inputName, { color: colors.text, borderColor: colors.border }]} value={childName} onChangeText={setChildName} />
+          </View>
+          
+          <View style={[styles.row, { marginBottom: 20 }]}>
+            <Text style={{ color: colors.text, fontSize: 18, fontWeight: 'bold' }}>Giới hạn toán:</Text>
+            <TextInput style={[styles.inputLimit, { color: colors.text, borderColor: colors.border }]} keyboardType="number-pad" value={maxLimit} onChangeText={setMaxLimit} maxLength={3} />
+          </View>
+          
+          <TouchableOpacity style={styles.saveBtn} onPress={saveBaseSettings} disabled={loading}>
+            <Text style={styles.saveText}>{loading ? 'Đang lưu...' : 'Lưu Cài Đặt Chung'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.section, { backgroundColor: colors.card }]}>
+          <Text style={{ color: colors.text, fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>Cá nhân hóa hình ảnh/video:</Text>
+          <TouchableOpacity style={[styles.saveBtn, { backgroundColor: '#10B981' }]} onPress={() => setShowMediaManager(true)}>
+            <Ionicons name="images" size={20} color="white" style={{ position: 'absolute', left: 15, top: 15 }} />
+            <Text style={styles.saveText}>Mở Kho Tư Liệu Của Bé</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.section, { backgroundColor: colors.card }]}>
+          <View style={styles.row}>
+            <Text style={{ color: colors.text, fontSize: 16 }}>Chế độ tối (Dark Mode)</Text>
+            <Switch value={theme === 'dark'} onValueChange={toggleTheme} />
           </View>
         </View>
 
-        <View style={styles.mediaGrid}>
-          {(Object.keys(CATEGORY_NAMES) as MediaType[]).map((key) => (
-            <TouchableOpacity key={key} style={styles.mediaCategoryBtn} onPress={() => setActiveCategory(key)}>
-              <Text style={styles.mediaCategoryTitle}>{CATEGORY_NAMES[key]}</Text>
-              <View style={styles.mediaBadge}>
-                <Text style={styles.mediaBadgeText}>{mediaData[key].length}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+        <View style={{ flex: 1, minHeight: 40 }} />
 
-      {/* --- GIAO DIỆN --- */}
-      <View style={[styles.section, { backgroundColor: colors.card }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Giao diện</Text>
-        <View style={styles.row}>
-          <View style={styles.rowLeft}>
-            <Ionicons name={isDarkMode ? "moon" : "sunny"} size={24} color={isDarkMode ? "#818CF8" : "#F59E0B"} />
-            <Text style={[styles.rowText, { color: colors.text }]}>Chế độ tối</Text>
-          </View>
-          <Switch value={isDarkMode} onValueChange={toggleTheme} trackColor={{ false: "#D1D5DB", true: "#818CF8" }} thumbColor={isDarkMode ? "#4F46E5" : "#F3F4F6"} />
-        </View>
-      </View>
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <Text style={styles.logoutText}>Đăng Xuất</Text>
+        </TouchableOpacity>
+      </ScrollView>
 
-      {/* --- PHẠM VI TOÁN --- */}
-      <View style={[styles.section, { backgroundColor: colors.card }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Phạm vi con số</Text>
-        <View style={styles.limitContainer}>
-          <Text style={[styles.limitLabel, { color: colors.text }]}>Bé làm toán từ 1 đến:</Text>
-          <TextInput
-            style={styles.limitInput}
-            keyboardType="number-pad"
-            value={maxLimit ? String(maxLimit) : ''}
-            onChangeText={(text) => {
-              const val = parseInt(text.replace(/[^0-9]/g, ''), 10);
-              setMaxLimit(isNaN(val) ? 0 : val);
-            }}
-            onEndEditing={() => {
-              let finalLimit = maxLimit < 5 ? 5 : maxLimit;
-              setMaxLimit(finalLimit);
-              updateSettings(finalLimit, mathType);
-            }}
-          />
-        </View>
-        <Text style={styles.hint}>Nhập số bất kỳ (tối thiểu là 5) rồi nhấn OK/Xong trên bàn phím để lưu.</Text>
-      </View>
-
-      {/* --- LOẠI PHÉP TÍNH --- */}
-      <View style={[styles.section, { backgroundColor: colors.card }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Loại phép tính</Text>
-        <View style={styles.typeContainer}>
-          <TouchableOpacity style={[styles.typeBtn, mathType === 'cong' && styles.typeBtnActive, { borderColor: colors.border }]} onPress={() => { setMathType('cong'); updateSettings(maxLimit, 'cong'); }}>
-            <Text style={styles.typeEmoji}>➕</Text><Text style={[styles.typeText, mathType === 'cong' && styles.typeTextActive]}>Phép Cộng</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.typeBtn, mathType === 'tru' && styles.typeBtnActive, { borderColor: colors.border }]} onPress={() => { setMathType('tru'); updateSettings(maxLimit, 'tru'); }}>
-            <Text style={styles.typeEmoji}>➖</Text><Text style={[styles.typeText, mathType === 'tru' && styles.typeTextActive]}>Phép Trừ</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.typeBtn, mathType === 'ca_hai' && styles.typeBtnActive, { borderColor: colors.border }]} onPress={() => { setMathType('ca_hai'); updateSettings(maxLimit, 'ca_hai'); }}>
-            <Text style={styles.typeEmoji}>🎲</Text><Text style={[styles.typeText, mathType === 'ca_hai' && styles.typeTextActive]}>Cả Hai</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Phiên bản 1.0.0</Text>
-        <Text style={styles.footerText}>Lưu trữ an toàn trên máy bé 🚀</Text>
-      </View>
-
-      {/* MODAL 1: HIỂN THỊ DANH SÁCH ẢNH THEO DANH MỤC */}
-      <Modal visible={activeCategory !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveCategory(null)}>
-        <View style={styles.modalContainer}>
+      <Modal visible={showMediaManager} animationType="slide" presentationStyle="pageSheet">
+        <View style={[styles.modalContainer, { backgroundColor: colors.bg }]}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{activeCategory ? CATEGORY_NAMES[activeCategory] : ''}</Text>
-            <TouchableOpacity onPress={() => setActiveCategory(null)} style={styles.closeBtn}>
-              <Ionicons name="close-circle" size={32} color="#6B7280" />
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Quản Lý Tư Liệu</Text>
+            <TouchableOpacity onPress={() => setShowMediaManager(false)}>
+              <Ionicons name="close-circle" size={36} color="#EF4444" />
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={styles.galleryGrid}>
-            <TouchableOpacity style={styles.addMediaBtn} onPress={handleAddMedia}>
-              <Ionicons name="add" size={40} color="#4F46E5" />
-              <Text style={{color: '#4F46E5', fontWeight: 'bold', marginTop: 5}}>Thêm mới</Text>
-            </TouchableOpacity>
-
-            {activeCategory && mediaData[activeCategory].map((item) => (
-              <TouchableOpacity key={item.id} style={styles.thumbContainer} onPress={() => { setSelectedItem(item); setEditName(item.name); }}>
-                <Image source={{ uri: item.uri }} style={styles.thumbImage} />
-                {item.type === 'video' && <Ionicons name="play-circle" size={30} color="white" style={styles.videoIcon} />}
-                <View style={styles.thumbLabelBox}>
-                  <Text style={styles.thumbLabelText} numberOfLines={1}>{item.name}</Text>
-                </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catScroll} contentContainerStyle={{ paddingHorizontal: 10 }}>
+            {CATEGORIES.map(cat => (
+              <TouchableOpacity 
+                key={cat.id} 
+                style={[styles.catBtn, selectedCat.id === cat.id && styles.catBtnActive]} 
+                onPress={() => setSelectedCat(cat)}
+              >
+                <Text style={[styles.catBtnText, selectedCat.id === cat.id && { color: 'white' }]}>{cat.name}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
-        </View>
-      </Modal>
 
-      {/* MODAL 2: CHI TIẾT 1 ẢNH */}
-      <Modal visible={selectedItem !== null} transparent={true} animationType="fade" onRequestClose={() => setSelectedItem(null)}>
-        <View style={styles.detailOverlay}>
-          <View style={styles.detailBox}>
-            <TouchableOpacity onPress={() => setSelectedItem(null)} style={styles.detailCloseBtn}>
-              <Ionicons name="close-circle" size={35} color="#EF4444" />
-            </TouchableOpacity>
-
-            {selectedItem && (
-              <>
-                <Image source={{ uri: selectedItem.uri }} style={styles.detailImage} resizeMode="contain" />
-                
-                <Text style={styles.inputLabel}>Tên hiển thị (dùng làm đáp án đọc):</Text>
-                <View style={styles.renameRow}>
-                  <TextInput style={styles.nameInput} value={editName} onChangeText={setEditName} placeholder="Nhập tên ảnh..." />
-                  <TouchableOpacity style={styles.saveNameBtn} onPress={handleRename}>
-                    <Text style={styles.saveNameText}>Lưu</Text>
-                  </TouchableOpacity>
+          <ScrollView style={styles.mediaList}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Tư liệu có sẵn trong App:</Text>
+            {selectedCat.defaults.map((item: any, index: number) => {
+              const itemKey = `${selectedCat.id}_${index}`;
+              const isOff = disabledDefaults.includes(itemKey);
+              
+              // TÈO ĐÃ TÁCH XỬ LÝ ẢNH Ở ĐÂY ĐỂ TRÁNH LỖI TRẮNG MÀN HÌNH
+              const imageSource = item?.image ? item.image : item;
+              // Nếu là mảng Tập Đọc/Nối từ, lấy tên mặc định từ thuộc tính word, nếu không thì lấy tên chung chung
+              const defaultName = item?.word ? item.word : (selectedCat.id.includes('tap_doc') ? 'Từ vựng ' + (index+1) : `Ảnh/Video số ${index + 1}`);
+              const displayName = renamedDefaults[itemKey] || defaultName;
+              
+              return (
+                <View key={itemKey} style={[styles.mediaItem, { backgroundColor: colors.card }]}>
+                  <View style={styles.mediaPreview}>
+                    {selectedCat.type === 'image' ? (
+                      <Image source={imageSource} style={styles.thumb} />
+                    ) : (
+                      <View style={[styles.thumb, { backgroundColor: '#374151', justifyContent: 'center', alignItems: 'center' }]}>
+                        <Ionicons name="play" size={24} color="white" />
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.mediaInfo}>
+                    <TextInput 
+                      style={[styles.editNameInput, { color: colors.text, borderColor: colors.border }]} 
+                      value={displayName} 
+                      onChangeText={(val) => updateDefaultMediaName(index, val)}
+                      placeholder="Gõ từ vựng vào đây..."
+                    />
+                  </View>
+                  <Switch value={!isOff} onValueChange={() => toggleDefaultMedia(index)} trackColor={{ true: '#10B981', false: '#D1D5DB' }} />
                 </View>
+              );
+            })}
 
-                <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-                  <Ionicons name="trash" size={20} color="white" />
-                  <Text style={styles.deleteBtnText}>Xóa file này</Text>
-                </TouchableOpacity>
-              </>
-            )}
+            <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 20 }]}>Tư liệu Ba tự thêm:</Text>
+            {customMedia.filter((m: CustomMedia) => m.categoryId === selectedCat.id).length === 0 ? (
+              <Text style={{ color: 'gray', fontStyle: 'italic', marginLeft: 15 }}>Chưa có mục nào được thêm.</Text>
+            ) : null}
+            
+            {customMedia.filter((m: CustomMedia) => m.categoryId === selectedCat.id).map((item: CustomMedia) => (
+              <View key={item.id} style={[styles.mediaItem, { backgroundColor: colors.card }]}>
+                 <Image source={{ uri: item.uri }} style={styles.thumb} />
+                 <View style={styles.mediaInfo}>
+                    <TextInput 
+                      style={[styles.editNameInput, { color: colors.text, borderColor: colors.border }]} 
+                      value={item.name} 
+                      onChangeText={(val) => updateCustomMediaName(item.id, val)}
+                      placeholder="Gõ từ vựng vào đây..."
+                    />
+                 </View>
+                 <Switch value={item.isActive} onValueChange={() => toggleCustomMedia(item.id)} trackColor={{ true: '#10B981', false: '#D1D5DB' }} />
+              </View>
+            ))}
+          </ScrollView>
+
+          <View style={{ padding: 20, borderTopWidth: 1, borderColor: '#E5E7EB' }}>
+             <TouchableOpacity style={[styles.saveBtn, { backgroundColor: '#F59E0B' }]} onPress={pickAndSaveMedia}>
+                <Ionicons name="add-circle" size={24} color="white" style={{ position: 'absolute', left: 15, top: 13 }} />
+                <Text style={styles.saveText}>Thêm {selectedCat.type === 'image' ? 'Ảnh' : 'Video'} Mới</Text>
+             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-    </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, marginTop: 40 },
-  title: { fontSize: 32, fontWeight: '900' },
-  section: { borderRadius: 20, padding: 16, marginBottom: 20, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
+  scrollContent: { flexGrow: 1, padding: 20 },
+  header: { alignItems: 'center', marginVertical: 20 },
+  profileIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F59E0B', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+  email: { fontSize: 18, fontWeight: '600' },
+  section: { padding: 20, borderRadius: 15, marginBottom: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  rowLeft: { flexDirection: 'row', alignItems: 'center' },
-  rowText: { fontSize: 16, fontWeight: '600', marginLeft: 12 },
-  
-  limitContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginVertical: 10 },
-  limitLabel: { fontSize: 16, fontWeight: 'bold', marginRight: 15 },
-  limitInput: { fontSize: 24, fontWeight: '900', color: '#4F46E5', backgroundColor: '#EEF2FF', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 15, borderWidth: 2, borderColor: '#818CF8', minWidth: 100, textAlign: 'center' },
-  
-  hint: { fontSize: 14, color: '#6B7280', marginTop: 8, textAlign: 'center' },
-  typeContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
-  typeBtn: { width: '30%', paddingVertical: 12, borderRadius: 15, borderWidth: 2, alignItems: 'center', backgroundColor: 'white' },
-  typeBtnActive: { backgroundColor: '#EEF2FF', borderColor: '#4F46E5' },
-  typeEmoji: { fontSize: 24, marginBottom: 5 },
-  typeText: { fontSize: 12, fontWeight: 'bold', color: '#6B7280' },
-  typeTextActive: { color: '#4F46E5' },
-  footer: { marginTop: 20, marginBottom: 40, alignItems: 'center' },
-  footerText: { color: '#9CA3AF', fontSize: 14, marginBottom: 5 },
+  inputName: { borderWidth: 2, borderRadius: 10, paddingHorizontal: 15, paddingVertical: 10, fontSize: 18, flex: 1, marginLeft: 15, fontWeight: 'bold' },
+  inputLimit: { borderWidth: 2, borderRadius: 10, paddingHorizontal: 15, paddingVertical: 10, fontSize: 18, width: 80, textAlign: 'center', fontWeight: 'bold' },
+  saveBtn: { backgroundColor: '#3B82F6', padding: 15, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  saveText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+  logoutBtn: { backgroundColor: '#EF4444', padding: 15, borderRadius: 10, alignItems: 'center', marginBottom: 20 },
+  logoutText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 
-  mediaGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  mediaCategoryBtn: { width: '48%', backgroundColor: 'white', padding: 15, borderRadius: 15, marginBottom: 10, borderWidth: 1, borderColor: '#BBF7D0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  mediaCategoryTitle: { fontSize: 14, fontWeight: 'bold', color: '#166534', flex: 1 },
-  mediaBadge: { backgroundColor: '#22C55E', borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' },
-  mediaBadgeText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
-
-  modalContainer: { flex: 1, backgroundColor: '#F3F4F6' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
-  closeBtn: { padding: 5 },
-  galleryGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 10, gap: 10 },
-  addMediaBtn: { width: (width - 40) / 3, height: (width - 40) / 3, backgroundColor: '#E0E7FF', borderRadius: 15, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderStyle: 'dashed', borderColor: '#818CF8' },
-  thumbContainer: { width: (width - 40) / 3, height: (width - 40) / 3, borderRadius: 15, overflow: 'hidden', backgroundColor: 'black' },
-  thumbImage: { width: '100%', height: '100%', opacity: 0.8 },
-  videoIcon: { position: 'absolute', top: '50%', left: '50%', transform: [{translateX: -15}, {translateY: -15}] },
-  thumbLabelBox: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: 'rgba(0,0,0,0.6)', padding: 5 },
-  thumbLabelText: { color: 'white', fontSize: 10, textAlign: 'center', fontWeight: 'bold' },
-
-  detailOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  detailBox: { width: '100%', backgroundColor: 'white', borderRadius: 20, padding: 20, alignItems: 'center' },
-  detailCloseBtn: { position: 'absolute', top: -15, right: -15, backgroundColor: 'white', borderRadius: 20 },
-  detailImage: { width: 250, height: 250, borderRadius: 10, marginBottom: 20, backgroundColor: '#E5E7EB' },
-  inputLabel: { alignSelf: 'flex-start', fontWeight: 'bold', color: '#4B5563', marginBottom: 5 },
-  renameRow: { flexDirection: 'row', width: '100%', marginBottom: 20 },
-  nameInput: { flex: 1, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, paddingHorizontal: 15, paddingVertical: 10, backgroundColor: '#F9FAFB' },
-  saveNameBtn: { backgroundColor: '#4F46E5', paddingHorizontal: 20, justifyContent: 'center', borderRadius: 10, marginLeft: 10 },
-  saveNameText: { color: 'white', fontWeight: 'bold' },
-  deleteBtn: { flexDirection: 'row', backgroundColor: '#EF4444', width: '100%', padding: 15, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  deleteBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 10 }
+  modalContainer: { flex: 1, paddingTop: Platform.OS === 'ios' ? 40 : 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderColor: '#E5E7EB' },
+  modalTitle: { fontSize: 24, fontWeight: 'bold' },
+  catScroll: { maxHeight: 60, minHeight: 60, borderBottomWidth: 1, borderColor: '#E5E7EB' },
+  catBtn: { paddingHorizontal: 20, paddingVertical: 10, marginHorizontal: 5, borderRadius: 20, backgroundColor: '#E5E7EB', alignSelf: 'center' },
+  catBtnActive: { backgroundColor: '#3B82F6' },
+  catBtnText: { fontSize: 16, fontWeight: 'bold', color: '#4B5563' },
+  mediaList: { flex: 1, padding: 15 },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10, marginLeft: 5 },
+  mediaItem: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 10, marginBottom: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+  mediaPreview: { width: 60, height: 60, borderRadius: 8, overflow: 'hidden', marginRight: 15 },
+  thumb: { width: '100%', height: '100%' },
+  mediaInfo: { flex: 1, justifyContent: 'center' },
+  editNameInput: { borderWidth: 1, borderRadius: 5, padding: 8, fontSize: 16, marginTop: 5, marginRight: 10, fontWeight: 'bold' }
 });
